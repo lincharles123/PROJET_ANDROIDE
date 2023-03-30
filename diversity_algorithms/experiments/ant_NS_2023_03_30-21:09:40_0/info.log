@@ -1,0 +1,33 @@
+## Features of the experiment ##
+Git hash: Command: brax_novelty.py -e ant -g 10
+Params: 
+	run_dir_name  (default)
+	verbosity none (default)
+	pop_size 100 (default)
+	lambda 2.0 (default)
+	env_name ant 
+	nb_gen 10 
+	dump_period_evolvability 100 (default)
+	extra_evolvability_gens  (default)
+	dump_period_bd 1 (default)
+	dump_period_population 1 (default)
+	dump_period_archive 1 (default)
+	variant NS (default)
+	cxpb 0 (default)
+	mutpb 1.0 (default)
+	indpb 0.1 (default)
+	eta_m 15.0 (default)
+	min -5.0 (default)
+	max 5.0 (default)
+	k 15 (default)
+	add_strategy random (default)
+	lambda_nov 6 (default)
+	geno_type realarray (default)
+	eval_budget -1 (default)
+	alphas 0.0 (default)
+	stop_archive_update -1 (default)
+	freeze_pop -1 (default)
+	pop_for_novelty_estimation 1 (default)
+	restart -1 (default)
+
+++ Started at: <2023_03_30-21:09:40>
