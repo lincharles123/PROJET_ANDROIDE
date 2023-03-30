@@ -64,7 +64,8 @@ class EvaluationFunctor:
 		if(self.controller is None):
 			print("ERROR: controller is None")
 		self.controller.set_parameters(genotype)
-	
+
+
 	def evaluate_indiv(self):
 		"""
 		Evaluate individual genotype (list of controller.n_weights floats) in environment env using
@@ -77,20 +78,18 @@ class EvaluationFunctor:
 		print("env reset")
 		self.evals += 1
 		self.traj=[]
-		key, self.key = jp.random_split(self.key)	# Split random key
-		state = self.env.reset(key)
-		self.total_reward = 0.			
+		state = self.env.reset(self.key)
+		cumulative_reward = 0.
 
-		@jax.jit
-		def step(state, _):
-			action = self.controller(state.obs)
-			state = self.env.step(state, action)
-			self.total_reward += state.reward
-			self.traj.append((state.obs, state.reward, state.done, state.info))
-			return state
+		def run_step(carry, unused_target_t):
+			(env_state, cumulative_reward) = carry
+			obs = env_state.obs
+			actions = self.controller(obs)
+			nstate = self.env.step(env_state, actions)
+			cumulative_reward = cumulative_reward + nstate.reward
+			return (nstate, cumulative_reward), (env_state.obs)
 
-		print(0)
-		state = jax.lax.scan(step, state, (),length=self.max_step)
+		state, _ = jax.lax.scan(run_step, (state, cumulative_reward), (),length=self.max_step)
 		return state.reward, state.done, self.total_reward, state.info
 
         
