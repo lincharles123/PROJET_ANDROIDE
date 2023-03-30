@@ -2,6 +2,7 @@
 # coding: utf-8
 
 from jax import numpy as jnp, random
+import jax
 
 ## Suppress TF info messages
 
@@ -29,6 +30,7 @@ class SimpleNeuralControllerNumpy():
     def __init__(self, n_in, n_out, n_hidden_layers=2, n_neurons_per_hidden=5, params=None):
         self.dim_in = n_in
         self.dim_out = n_out
+        self.key = random.PRNGKey(0)
         # if params is provided, we look for the number of hidden layers and neuron per layer into that parameter (a dicttionary)
         if (not params==None):
             if ("n_hidden_layers" in params.keys()):
@@ -41,23 +43,29 @@ class SimpleNeuralControllerNumpy():
         self.n_weights = None
         self.init_random_params()
         self.out = jnp.zeros(n_out)
-        self.key = random.PRNGKey(0)
         #print("Creating a simple mlp with %d inputs, %d outputs, %d hidden layers and %d neurons per layer"%(n_in, n_out,n_hidden_layers, n_neurons_per_hidden))
 
-    
+
     def init_random_params(self):
+        keys = random.split(self.key, self.n_hidden_layers+1)
+        w_key, b_key = random.split(keys[0])
         if(self.n_hidden_layers > 0):
-            self.weights = [random.random((self.dim_in,self.n_per_hidden))] # In -> first hidden
-            self.bias = [jnp.random.random(self.n_per_hidden)] # In -> first hidden
+            self.weights = [random.uniform(w_key, (self.dim_in,self.n_per_hidden),float, 0, 1)] # In -> first hidden
+            self.bias = [random.uniform(b_key, (self.n_hidden_layers,),float, 0, 1)] # In -> first hidden
             for i in range(self.n_hidden_layers-1): # Hidden -> hidden
-                self.weights.append(jnp.random.random((self.n_per_hidden,self.n_per_hidden)))
-                self.bias.append(jnp.random.random(self.n_per_hidden))
-            self.weights.append(jnp.random.random((self.n_per_hidden,self.dim_out))) # -> last hidden -> out
-            self.bias.append(jnp.random.random(self.dim_out))
+                w_key, b_key = random.split(keys[i+1])
+                self.weights.append(random.uniform(w_key, (self.n_per_hidden,self.n_per_hidden),float, 0, 1))
+                self.bias.append(random.uniform(b_key, (self.n_per_hidden,),float, 0, 1))
+            w_key, b_key = random.split(keys[-1])
+            self.weights.append(random.uniform(w_key, (self.n_hidden_layers,self.dim_out),float, 0, 1)) # -> last hidden -> out
+            self.bias.append(random.uniform(b_key, (self.dim_out,),float, 0, 1))
         else:
-            self.weights = [jnp.random.random((self.dim_in,self.dim_out))] # Single-layer perceptron
-            self.bias = [jnp.random.random(self.dim_out)]
-        self.n_weights = jnp.sum([jnp.product(w.shape) for w in self.weights]) + jnp.sum([jnp.product(b.shape) for b in self.bias])
+            self.weights = [random.uniform(w_key, (self.dim_in,self.dim_out),float, 0, 1)] # Single-layer perceptron
+            self.bias = [random.uniform(b_key, (self.dim_out),float, 0, 1)]
+        n_w = self.dim_in*self.n_per_hidden + self.n_per_hidden*self.n_per_hidden*(self.n_hidden_layers-1) + self.n_per_hidden*self.dim_out
+        n_b = self.n_per_hidden*self.n_hidden_layers + self.dim_out
+        self.n_weights = n_w + n_b
+        self.key = random.split(keys[-1], 1)
 
     def get_parameters(self):
         """
@@ -111,8 +119,8 @@ class SimpleNeuralControllerNumpy():
             w = jnp.array(flat_parameters[:n_w])
             self.weights = [w.reshape((self.dim_in,self.dim_out))]
             self.bias = [jnp.array(flat_parameters[n_w:])]
-        self.n_weights = jnp.sum([jnp.product(w.shape) for w in self.weights]) + jnp.sum([jnp.product(b.shape) for b in self.bias])
-    
+
+
     def predict(self,x):
         """
         Propagage
