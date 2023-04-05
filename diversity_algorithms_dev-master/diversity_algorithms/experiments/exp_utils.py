@@ -148,7 +148,6 @@ def preparing_run(eval_gym, params, with_scoop=False, deap=True):
         nbs=0
         
     sparams["ind_size"]=eval_gym.controller.n_weights
-	
     sparams["evolvability_nb_samples"]=evolvability_nb_samples
     sparams["min_bd"]=min_bd # not used by NS. It is just to keep track of it in the saved param file
     sparams["max_bd"]=max_bd # not used by NS. It is just to keep track of it in the saved param file

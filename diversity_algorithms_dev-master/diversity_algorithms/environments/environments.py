@@ -139,7 +139,7 @@ registered_environments["ant"] = {
 	"eval_params": {
 		"gym_env_name":"ant",
 		"gym_params":{},
-		"output":"final_reward"}, # Default
+		"output":"reward_forward"}, # Default
 	"grid_features": {
 		"min_x": [-1.35,-1.35],
 		"max_x": [1.35, 1.35],

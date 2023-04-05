@@ -10,9 +10,9 @@ import jax
 
 #import resource
 
-from diversity_algorithms.controllers import SimpleNeuralController #, DNNController
+from diversity_algorithms.controllers import SimpleNeuralController
 from diversity_algorithms.analysis.data_utils import listify
-
+from brax.training.networks import MLP
 
 # Fitness/evaluation function
 
@@ -20,7 +20,7 @@ default_max_step = 2000 # same as C++ sferes experiments
     
 
 class EvaluationFunctor:
-	def __init__(self, gym_env_name=None, gym_params={}, controller=None, controller_type=None, controller_params=None, output='-dist_obj',max_step=default_max_step, bd_function=None):
+	def __init__(self, gym_env_name=None, gym_params={}, controller=None, controller_type=None, controller_params=None, output='distance_from_origin',max_step=default_max_step, bd_function=None):
 		global current_serial
 		#print("Eval functor created")
 		#Env
@@ -38,8 +38,6 @@ class EvaluationFunctor:
 		else:
 			self.env = None
 		self.get_behavior_descriptor = bd_function
-		
-
 
 
 
@@ -57,7 +55,6 @@ class EvaluationFunctor:
 		else:
 			if(self.controller_type is not None or self.controller_params is not None):
 				print("WARNING: EvaluationFunctor built with both controller and controller_type/controller_params. controller_type/controller_params arguments  will be ignored")
-
 
 
 	def load_indiv(self, genotype):
@@ -81,16 +78,15 @@ class EvaluationFunctor:
 		state = self.env.reset(self.key)
 		cumulative_reward = 0.
 
-		def run_step(carry, unused_target_t):
-			(env_state, cumulative_reward) = carry
-			obs = env_state.obs
-			actions = self.controller(obs)
-			nstate = self.env.step(env_state, actions)
-			cumulative_reward = cumulative_reward + nstate.reward
-			return (nstate, cumulative_reward), (env_state.obs)
+		jit_step = jax.jit(self.env.step)
 
-		state, _ = jax.lax.scan(run_step, (state, cumulative_reward), (),length=self.max_step)
-		return state.reward, state.done, self.total_reward, state.info
+		for _ in range(self.max_step):
+			actions = self.controller(state.obs)
+			state = jit_step(state, actions)
+			cumulative_reward = cumulative_reward + state.reward
+			self.traj.append((state.obs, state.reward, state.done, state.metrics))
+
+		return state.reward, state.done, cumulative_reward, state.metrics
 
         
 	def __call__(self, genotype):
@@ -107,7 +103,7 @@ class EvaluationFunctor:
 		self.load_indiv(gen)
 		# Run eval genotype
 		#print("Start eval")
-		final_reward, end, total_reward, info = self.evaluate_indiv()
+		final_reward, end, cumulative_reward, metrics = self.evaluate_indiv()
 		#print("Eval done !")
 		# Select fitness
 		
@@ -120,13 +116,13 @@ class EvaluationFunctor:
 			sign = 1
 		
 		if(outdata=='total_reward'):
-			fitness = [total_reward]
+			fitness = [cumulative_reward]
 		elif(outdata=='final_reward'):
 			fitness = [final_reward]
 		elif(outdata==None or self.out=='none'):
 			fitness = [None]
-		elif(outdata in info):
-			fitness = listify(info[outdata])
+		elif(outdata in metrics):
+			fitness = [metrics[outdata]]
 		else:
 			print("ERROR: No known output %s" % outdata)
 			return None
@@ -140,6 +136,7 @@ class EvaluationFunctor:
 		else:
 			bd = self.get_behavior_descriptor(self.traj)
 			self.traj=None # to avoid taking too much memory
-			return [fitness,bd,info]
+			print([fitness,bd])
+			return [fitness,[bd]]
 
 

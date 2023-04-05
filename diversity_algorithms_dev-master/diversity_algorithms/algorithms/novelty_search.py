@@ -92,12 +92,6 @@ def build_toolbox_ns(evaluate,params,pool=None):
         toolbox.register("select", tools.selNSGA2)
         
     toolbox.register("evaluate", evaluate)
-    
-    # Parallelism
-    if(pool):
-        toolbox.register("map", pool.map)
-
-    
     return toolbox
 
 ## DEAP compatible algorithm
@@ -149,7 +143,7 @@ def novelty_ea(evaluate, params, pool=None):
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
     nb_eval+=len(invalid_ind)
-    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+    fitnesses = map(toolbox.evaluate, invalid_ind)
     # fit is a list of fitness (that is also a list) and behavior descriptor
 
     for ind, fit in zip(invalid_ind, fitnesses):

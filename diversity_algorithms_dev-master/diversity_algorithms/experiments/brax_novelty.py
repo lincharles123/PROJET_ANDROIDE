@@ -89,7 +89,7 @@ if(__name__=='__main__'):
 
 	sparams, pool = preparing_run(eval_func, params)
 
-	pop, archive, logbook, nb_eval = novelty_ea(eval_with_functor, sparams)
+	pop, archive, logbook, nb_eval = novelty_ea(eval_with_functor, sparams, None)
 
 	terminating_run(sparams, pop, archive, logbook, nb_eval)
 	sys.exit()
