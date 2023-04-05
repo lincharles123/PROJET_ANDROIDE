@@ -1,6 +1,7 @@
 from flax import linen as nn
-from jax import random, jit
+from jax import random
 from jax import numpy as jnp
+from jax.lax import dynamic_slice
 import numpy as np
 from flax.core.frozen_dict import freeze
 
@@ -46,24 +47,43 @@ class SimpleNeuralControllerFlax:
         self.shapes = [(weights[k]['bias'].shape, weights[k]['kernel'].shape) for k in self.keys]
         self.n_weights = sum([np.prod(shape[0]) + np.prod(shape[1]) for shape in self.shapes])
     
-    def set_parameters(self, flat_parameters):
+    
+    def array_to_fdict(self, flat_parameters):
         """
         Set all network parameters from a single array
         """
-        if (np.nan in flat_parameters):
-            print("WARNING: NaN in the parameters of the NN: "+str(list(flat_parameters)))
-        if (max(flat_parameters)>1000):
-            print("WARNING: max value of the parameters of the NN >1000: "+str(list(flat_parameters)))
-        flat_parameters = np.array(flat_parameters)
         i = 0 # index
         dict = {}
         for key, shape in zip(self.keys, self.shapes):
             dict[key] = {}
-            dict[key]['bias'] = flat_parameters[i:i+np.prod(shape[0])].reshape(shape[0])
-            i += np.prod(shape[0])
-            dict[key]['kernel'] = flat_parameters[i:i+np.prod(shape[1])].reshape(shape[1])
-            i += np.prod(shape[1])
-        self.weights = freeze({'params': dict})
+            dict[key]['bias'] = dynamic_slice(flat_parameters, (i,), shape[0]).reshape(shape[0])
+            i = i + shape[0][0]
+            dict[key]['kernel'] = dynamic_slice(flat_parameters, (i,), (shape[1][0]*shape[1][1],)).reshape(shape[1])
+            i = i + shape[1][0]*shape[1][1]
+        return freeze({'params': dict})
+    
+    
+    def predict(self, params, obs):
+        return self.model.apply(params, obs)
+    
+    # def set_parameters(self, flat_parameters):
+    #     """
+    #     Set all network parameters from a single array
+    #     """
+    #     if (np.nan in flat_parameters):
+    #         print("WARNING: NaN in the parameters of the NN: "+str(list(flat_parameters)))
+    #     if (max(flat_parameters)>1000):
+    #         print("WARNING: max value of the parameters of the NN >1000: "+str(list(flat_parameters)))
+    #     flat_parameters = np.array(flat_parameters)
+    #     i = 0 # index
+    #     dict = {}
+    #     for key, shape in zip(self.keys, self.shapes):
+    #         dict[key] = {}
+    #         dict[key]['bias'] = flat_parameters[i:i+np.prod(shape[0])].reshape(shape[0])
+    #         i += np.prod(shape[0])
+    #         dict[key]['kernel'] = flat_parameters[i:i+np.prod(shape[1])].reshape(shape[1])
+    #         i += np.prod(shape[1])
+    #     self.weights = freeze({'params': dict})
     
     def get_parameters(self):
         """
@@ -72,5 +92,5 @@ class SimpleNeuralControllerFlax:
         weights = [jnp.concatenate([self.weights['params'][k]['bias']] + [self.weights['params'][k]['kernel'].flatten()]) for k in self.keys]
         return jnp.concatenate(weights)
     
-    def __call__(self, obs):
-        return self.model.apply(self.weights, obs)
+    # def __call__(self, obs):
+    #     return self.model.apply(self.weights, obs)

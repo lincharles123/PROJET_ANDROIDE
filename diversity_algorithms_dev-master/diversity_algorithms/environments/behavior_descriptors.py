@@ -42,6 +42,4 @@ def ant_behavior_descriptor(traj):
 	"""
 	Computes the behavior descriptor from a trajectorty.
 	"""
-	last_step_data = traj[-1]
-	last_obs = last_step_data[3]
-	return last_obs['distance_from_origin']
+	return traj['distance_from_origin'][-1]
