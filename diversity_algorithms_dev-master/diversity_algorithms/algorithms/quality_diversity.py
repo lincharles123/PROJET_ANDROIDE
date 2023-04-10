@@ -291,13 +291,7 @@ def build_toolbox_qd(evaluate,params,pool=None):
     else:
         toolbox.register("select", tools.selNSGA2)
         
-    toolbox.register("evaluate", evaluate)
-    
-    # Parallelism
-    if(pool):
-        toolbox.register("map", pool.map)
-
-    
+    toolbox.register("map_eval", evaluate)
     return toolbox
 
 
@@ -321,7 +315,7 @@ def QDEa(evaluate, params, pool=None):
 
 	# Evaluate the seed population
 	nb_eval+=len(seed_population)
-	fitnesses = toolbox.map(toolbox.evaluate, seed_population)
+	fitnesses = toolbox.map_eval(seed_population)
 	# fit is a list of fitness (that is also a list) and behavior descriptor
 
 	for ind, fit in zip(seed_population, fitnesses):
@@ -383,10 +377,10 @@ def QDEa(evaluate, params, pool=None):
 
 
 
-	record = params["stats"].compile(seed_population) if params["stats"] is not None else {}
-	logbook.record(gen=0, nevals=len(seed_population), **record)
-	if(verbosity(params)):
-		print(logbook.stream)
+	# record = params["stats"].compile(seed_population) if params["stats"] is not None else {}
+	# logbook.record(gen=0, nevals=len(seed_population), **record)
+	# if(verbosity(params)):
+	# 	print(logbook.stream)
 	
 	for ind in seed_population:
 		ind.evolvability_samples=None # To prevent memory from inflating too much..
@@ -421,7 +415,7 @@ def QDEa(evaluate, params, pool=None):
 		
 		
 		# Evaluate the offspring
-		fitnesses = toolbox.map(toolbox.evaluate, offspring)
+		fitnesses = toolbox.map_eval(offspring)
 		for ind, fit in zip(offspring, fitnesses):
 			ind.fitness.values = fit[0] 
 			ind.fit = fit[0]
@@ -436,7 +430,7 @@ def QDEa(evaluate, params, pool=None):
 		if(len(offspring)) < params["n_add"]:
 			print("WARNING: Not enough parents sampled to get %d offspring; will complete with %d random individuals" % (params["n_add"], params["n_add"]-len(offspring)))
 			extra_random_indivs = toolbox.population(n=(params["n_add"]-len(offspring)))
-			extra_fitnesses = toolbox.map(toolbox.evaluate, extra_random_indivs)
+			extra_fitnesses = toolbox.map_eval(extra_random_indivs)
 			for ind, fit in zip(extra_random_indivs, extra_fitnesses):
 				ind.fitness.values = fit[0]
 				ind.fit = fit[0]
@@ -497,11 +491,11 @@ def QDEa(evaluate, params, pool=None):
 			ind.evolvability_samples=None
 
 		
-		# Update the statistics with the new population
-		record = params["stats"].compile(population) if params["stats"] is not None else {}
-		logbook.record(gen=gen, nevals=len(offspring), **record)
-		if(verbosity(params)):
-			print(logbook.stream)
+		# # Update the statistics with the new population
+		# record = params["stats"].compile(population) if params["stats"] is not None else {}
+		# logbook.record(gen=gen, nevals=len(offspring), **record)
+		# if(verbosity(params)):
+		# 	print(logbook.stream)
 
 
 

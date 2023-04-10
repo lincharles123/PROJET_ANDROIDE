@@ -138,11 +138,26 @@ registered_environments["ant"] = {
 	"eval": brax_env.EvaluationFunctor,
 	"eval_params": {
 		"gym_env_name":"ant",
-		"gym_params":{},
-		"output":"reward_forward"}, # Default
+		"gym_params":{"batch_size": True},
+		"output":"final_reward"}, # Default
 	"grid_features": {
-		"min_x": [-1.35,-1.35],
-		"max_x": [1.35, 1.35],
+		"min_x": [-600,-600],
+		"max_x": [600, 600],
 		"nb_bin": 50
 	}
 }
+
+registered_environments["humanoid"] = {
+	"bd_func": ant_behavior_descriptor,
+	"eval": brax_env.EvaluationFunctor,
+	"eval_params": {
+		"gym_env_name":"humanoid",
+		"gym_params":{"batch_size": True},
+		"output":"final_reward"}, # Default
+	"grid_features": {
+		"min_x": [-600,-600],
+		"max_x": [600, 600],
+		"nb_bin": 50
+	}
+}
+

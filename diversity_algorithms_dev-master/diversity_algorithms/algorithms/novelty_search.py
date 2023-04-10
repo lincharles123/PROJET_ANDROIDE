@@ -6,8 +6,8 @@ import numpy as np
 import datetime
 import os
 import array
-
-
+import jax
+from jax import numpy as jnp
 creator = None
 def set_creator(cr):
     global creator
@@ -57,7 +57,6 @@ def dist_to_shapes(pp, ls):
 
 
 def build_toolbox_ns(evaluate,params,pool=None):
-         
     toolbox = base.Toolbox()
 
     if(params["geno_type"] == "realarray"):
@@ -91,13 +90,13 @@ def build_toolbox_ns(evaluate,params,pool=None):
         print("Variant not among the authorized variants (NS, Fit, Random, DistExplArea), assuming multi-objective variant")
         toolbox.register("select", tools.selNSGA2)
         
-    toolbox.register("evaluate", evaluate)
+    toolbox.register("map_eval", evaluate)
     return toolbox
 
 ## DEAP compatible algorithm
 def novelty_ea(evaluate, params, pool=None):
     """Novelty Search algorithm
- 
+
     Novelty Search algorithm. Parameters:
     :param evaluate: the evaluation function
     :param params: the dict of run parameters
@@ -143,12 +142,14 @@ def novelty_ea(evaluate, params, pool=None):
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
     nb_eval+=len(invalid_ind)
-    fitnesses = map(toolbox.evaluate, invalid_ind)
+
+    fitnesses = toolbox.map_eval(invalid_ind)
     # fit is a list of fitness (that is also a list) and behavior descriptor
 
     for ind, fit in zip(invalid_ind, fitnesses):
         ind.fit = fit[0] # fit is an attribute just used to store the fitness value
         ind.parent_bd=None
+
         ind.bd=listify(fit[1])
         ind.id = generate_uuid()
         ind.parent_id = None
@@ -157,15 +158,14 @@ def novelty_ea(evaluate, params, pool=None):
         ind.am_parent=0
         
     archive=updateNovelty(population,population,None,params)
-
-    alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
+    #alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
     isortednov=sorted(range(len(population)), key=lambda k: population[k].novelty, reverse=True)
 
     varian=params["variant"].replace(",","")
 
     
     for i,ind in enumerate(population):
-        ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
+        #ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
         ind.rank_novelty=isortednov.index(i)
         ind.dist_to_parent=0
         if (emo): 
@@ -188,11 +188,11 @@ def novelty_ea(evaluate, params, pool=None):
     # Do we look at the evolvability of individuals (WARNING: it will make runs much longer !)
     generate_evolvability_samples(params, population, gen, toolbox)
 
-    record = params["stats"].compile(population) if params["stats"] is not None else {}
-    record_offspring = params["stats_offspring"].compile(population) if params["stats_offspring"] is not None else {}
-    logbook.record(gen=0, nevals=len(invalid_ind), **record, **record_offspring)
-    if (verbosity(params)):
-        print(logbook.stream)
+    # record = params["stats"].compile(population) if params["stats"] is not None else {}
+    # record_offspring = params["stats_offspring"].compile(population) if params["stats_offspring"] is not None else {}
+    # logbook.record(gen=0, nevals=len(invalid_ind), **record, **record_offspring)
+    # if (verbosity(params)):
+    #     print(logbook.stream)
     
     #generate_dumps(params, population, None, gen, pop1label="population", archive=None, logbook=None)
 
@@ -216,7 +216,7 @@ def novelty_ea(evaluate, params, pool=None):
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        fitnesses = toolbox.map_eval(invalid_ind)
         nb_eval+=len(invalid_ind)
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fit = fit[0]
@@ -243,12 +243,11 @@ def novelty_ea(evaluate, params, pool=None):
 
 
         archive=updateNovelty(pq,offspring,archive,params, pop_for_novelty_estimation)
-            
-        alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
+        #alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
         isortednov=sorted(range(len(pq)), key=lambda k: pq[k].novelty, reverse=True)
 
         for i,ind in enumerate(pq):
-            ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
+            #ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
             ind.rank_novelty=isortednov.index(i)
             #print("Indiv #%d: novelty=%f rank=%d"%(i, ind.novelty, ind.rank_novelty))
             if (ind.parent_bd is None):
@@ -311,11 +310,11 @@ def novelty_ea(evaluate, params, pool=None):
         generate_evolvability_samples(params, population, gen, toolbox)
         
         # Update the statistics with the new population
-        record = params["stats"].compile(population) if params["stats"] is not None else {}
-        record_offspring = params["stats_offspring"].compile(offspring) if params["stats_offspring"] is not None else {}
-        logbook.record(gen=gen, nevals=len(invalid_ind), **record, **record_offspring)
-        if (verbosity(params)):
-            print(logbook.stream)
+        # record = params["stats"].compile(population) if params["stats"] is not None else {}
+        # record_offspring = params["stats_offspring"].compile(offspring) if params["stats_offspring"] is not None else {}
+        # logbook.record(gen=gen, nevals=len(invalid_ind), **record, **record_offspring)
+        # if (verbosity(params)):
+        #     print(logbook.stream)
 
         for ind in population:
             ind.evolvability_samples=None

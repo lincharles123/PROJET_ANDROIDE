@@ -164,7 +164,7 @@ def sample_from_pop(population, toolbox, lambda_, cxpb, mutpb):
     #for of in offspring:
     #    print("Offspring: "+str(of))
     # Evaluate the individuals with an invalid fitness
-    fitnesses = toolbox.map(toolbox.evaluate, offspring)
+    fitnesses = toolbox.map_eval(offspring)
     for ind, fit in zip(offspring, fitnesses):
         ind.fitness.values = fit[0] 
         ind.bd = fit[1]

@@ -4,29 +4,42 @@
 # pyMaze expriments
 
 from brax import envs
-from brax import jumpy as jnp
+from brax.envs import wrappers
+from brax import jumpy as jp
 import jax
 from functools import partial
-import time
 
-#import resource
-
-from diversity_algorithms.controllers import SimpleNeuralController
-from diversity_algorithms.analysis.data_utils import listify
-from brax.training.networks import MLP
 
 # Fitness/evaluation function
 
 default_max_step = 2000 # same as C++ sferes experiments
-    
+
+def create(env_name,
+		   episode_length = 1000,
+		   action_repeat = 1,
+		   auto_reset = True,
+		   batch_size = None,
+		   eval_metrics = False,
+		   **kwargs):
+	env = envs.get_environment(env_name, **kwargs)
+	if episode_length is not None:
+		env = wrappers.EpisodeWrapper(env, episode_length, action_repeat)
+	if batch_size:
+		env = wrappers.VmapWrapper(env)
+	if auto_reset:
+		env = wrappers.AutoResetWrapper(env)
+	if eval_metrics:
+		env = wrappers.EvalWrapper(env)
+
+	return env
 
 class EvaluationFunctor:
-	def __init__(self, gym_env_name=None, gym_params={}, controller=None, controller_type=None, controller_params=None, output='distance_from_origin',max_step=default_max_step, bd_function=None):
+	def __init__(self, gym_env_name=None, gym_params={}, controller=None, controller_type=None, controller_params=None, output='total_reward',max_step=default_max_step, bd_function=None):
 		global current_serial
 		#print("Eval functor created")
 		#Env
 		#Controller
-		self.key = jax.random.PRNGKey(0)
+		self.key = jax.random.PRNGKey(0) # key used for random state reset
 		self.out = output
 		self.max_step = max_step
 		self.controller=controller
@@ -41,11 +54,7 @@ class EvaluationFunctor:
 
 	def set_env(self, env_name, gym_params):
 		### Modified
-		self.env = envs.create(env_name, **gym_params)
-		key, self.key = jax.random.split(self.key)
-		self.jit_env_reset = jax.jit(self.env.reset)
-		self.jit_step = jax.jit(self.env.step)
-		self.jit_env_reset(rng=key)
+		self.env = create(env_name, **gym_params)
 		self.env_name = env_name
 		print("Environment set to", self.env_name)
 
@@ -53,39 +62,48 @@ class EvaluationFunctor:
 			if(self.controller_type is None):
 				raise RuntimeError("Please either give a controller or specify controller type")
 			self.controller = self.controller_type(self.env.observation_size,self.env.action_size, params=self.controller_params)
-			self.jit_model = jax.jit(self.controller.predict)
-			self.jit_array_to_fdict = jax.jit(self.controller.array_to_fdict)
+
 		else:
 			if(self.controller_type is not None or self.controller_params is not None):
 				print("WARNING: EvaluationFunctor built with both controller and controller_type/controller_params. controller_type/controller_params arguments  will be ignored")
 
+		# jit functions
+		self.jit_env_reset = jax.jit(self.env.reset)
+		self.jit_step = jax.jit(self.env.step)
+		self.jit_model = jax.jit(self.controller.predict)
+		self.jit_array_to_fdict = jax.jit(self.controller.array_to_fdict)
+
+
 	@partial(jax.jit, static_argnums=(0,))
-	def evaluate_indiv(self, state, params):
+	def eval(self, init_states, params):
 		def eval_step(carry, _):
-			state, = carry
-			state = self.jit_step(state, self.jit_model(params, state.obs))
-			return (state,), (state.reward, state.metrics)
+			states = carry
+			next_states = self.env.step(states, jp.vmap(self.jit_model)(params, states.obs))
+			return (next_states), (next_states.reward, next_states.metrics)
+		return jp.scan(eval_step, init_states, None, length=self.max_step)
 
-		(state,), (rewards, traj) = jax.lax.scan(eval_step, (state,), (), length=self.max_step)
-		return state, rewards, traj
-
-	def __call__(self, genotype):
+	def __call__(self, genotypes):
 		#print("Eval functor CALL")
 		# Load genotype
 		#print("Load gen")
-		if(type(genotype)==tuple):
-			gen, ngeneration, idx = jnp.array(genotype)
+		if(type(genotypes)==tuple):
+			gen, ngeneration, idx = jp.array(genotypes)
 			# print("Start main eval loop -- #%d evals for this functor so far" % self.evals)
 			# print("Evaluating indiv %d of gen %d" % (idx, ngeneration))
 			# print('Eval thread: memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 		else:
-			gen = jnp.array(genotype)
-		key, self.key = jax.random.split(self.key)
-		state = self.jit_env_reset(key)
-		params = self.jit_array_to_fdict(gen)
-		start = time.time()
-		state, rewards, traj = self.evaluate_indiv(state, params)
-		print("Eval time: %f" % (time.time()-start))
+			gen = jp.array(genotypes)
+
+		params = jp.vmap(self.jit_array_to_fdict)(gen) 		# convert array type gen to fdict
+
+		keys = jp.random_split(self.key, gen.shape[0]) 	# generate random keys for each individual
+		self.key = jp.random_split(keys[-1], 1)[0] 		# update key for next call
+		init_states = self.jit_env_reset(keys) 			# get different initial states for each individual
+
+		states, (rewards, metrics) = self.eval(init_states, params) # evaluate
+		for key in metrics:
+			metrics[key] = metrics[key].T				# transpose metrics to have shape (n_indiv, n_metrics)	
+
 		# Select fitness
 		outdata = str(self.out)
 		# Detect minus sign
@@ -96,24 +114,27 @@ class EvaluationFunctor:
 			sign = 1
 		
 		if(outdata=='total_reward'):
-			fitness = [jnp.sum(rewards)]
+			fitness = jp.sum(rewards, axis=0)
 		elif(outdata=='final_reward'):
-			fitness = [rewards[-1]]
+			fitness = states.reward
 		elif(outdata==None or self.out=='none'):
-			fitness = [None]
-		elif(outdata in state.metrics):
-			fitness = [state.metrics[outdata]]
+			fitness = [[None] for _ in range(gen.shape[0])]
+		elif(outdata in states.metrics):
+			fitness = [states.metrics[outdata]]
 		else:
 			print("ERROR: No known output %s" % outdata)
 			return None
 		
 		# Change sign if needed
-		fitness = list(map(lambda x:sign*x, fitness))
-		
+		fitness = jax.lax.map(lambda x:sign*x, fitness).tolist()
+		if type(fitness[0]) is not list:
+			fitness = [[x] for x in fitness]
+
 		if self.get_behavior_descriptor is None:
 			return fitness
 		else:
-			bd = self.get_behavior_descriptor(traj)
-			return [fitness,[bd]]
+			res = jax.lax.map(self.get_behavior_descriptor, metrics)
+			bd = jp.stack((res[0], res[1]), axis=1).tolist()
+			return [(f, r) for f, r in zip(fitness, bd)]
 
 
