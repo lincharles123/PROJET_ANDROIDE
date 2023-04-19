@@ -1,5 +1,5 @@
 ## Features of the experiment ##
-Git hash: 9073b74
+Git hash: 43961e6
 Command: brax_novelty.py -e ant
 Params: 
 	run_dir_name  (default)
@@ -31,4 +31,4 @@ Params:
 	pop_for_novelty_estimation 1 (default)
 	restart -1 (default)
 
-++ Started at: <2023_04_12-20:14:42>
+++ Started at: <2023_04_15-18:43:24>

@@ -138,7 +138,7 @@ registered_environments["ant"] = {
 	"eval": brax_env.EvaluationFunctor,
 	"eval_params": {
 		"gym_env_name":"ant",
-		"gym_params":{"batch_size": True},
+		"gym_params":{},
 		"output":"final_reward"}, # Default
 	"grid_features": {
 		"min_x": [-600,-600],
@@ -152,7 +152,7 @@ registered_environments["humanoid"] = {
 	"eval": brax_env.EvaluationFunctor,
 	"eval_params": {
 		"gym_env_name":"humanoid",
-		"gym_params":{"batch_size": True},
+		"gym_params":{},
 		"output":"final_reward"}, # Default
 	"grid_features": {
 		"min_x": [-600,-600],

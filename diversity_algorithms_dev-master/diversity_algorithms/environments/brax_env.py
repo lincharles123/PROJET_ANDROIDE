@@ -3,9 +3,9 @@
 
 # pyMaze expriments
 
+from brax.envs import wrapper
 from brax import envs
-from brax.envs import wrappers
-from brax import jumpy as jp
+from brax.v1 import jumpy as jp
 import jax
 from functools import partial
 
@@ -14,24 +14,11 @@ from functools import partial
 
 default_max_step = 2000 # same as C++ sferes experiments
 
-def create(env_name,
-		   episode_length = 1000,
-		   action_repeat = 1,
-		   auto_reset = True,
-		   batch_size = None,
-		   eval_metrics = False,
-		   **kwargs):
-	env = envs.get_environment(env_name, **kwargs)
-	if episode_length is not None:
-		env = wrappers.EpisodeWrapper(env, episode_length, action_repeat)
-	if batch_size:
-		env = wrappers.VmapWrapper(env)
-	if auto_reset:
-		env = wrappers.AutoResetWrapper(env)
-	if eval_metrics:
-		env = wrappers.EvalWrapper(env)
-
-	return env
+# change vmapwrapper reset to use jax.vmap on already generated random keys
+class custom_vmap(wrapper.VmapWrapper):
+    def reset(self, rng):
+        return jp.vmap(self.env.reset)(rng)
+wrapper.VmapWrapper = custom_vmap
 
 class EvaluationFunctor:
 	def __init__(self, gym_env_name=None, gym_params={}, controller=None, controller_type=None, controller_params=None, output='total_reward',max_step=default_max_step, bd_function=None):
@@ -54,7 +41,7 @@ class EvaluationFunctor:
 
 	def set_env(self, env_name, gym_params):
 		### Modified
-		self.env = create(env_name, **gym_params)
+		self.env = envs.create(env_name, batch_size=1, auto_reset=False, **gym_params)
 		self.env_name = env_name
 		print("Environment set to", self.env_name)
 
@@ -78,7 +65,7 @@ class EvaluationFunctor:
 	def eval(self, init_states, params):
 		def eval_step(carry, _):
 			states = carry
-			next_states = self.env.step(states, jp.vmap(self.jit_model)(params, states.obs))
+			next_states = self.jit_step(states, jp.vmap(self.jit_model)(params, states.obs))
 			return (next_states), (next_states.reward, next_states.metrics)
 		return jp.scan(eval_step, init_states, None, length=self.max_step)
 
@@ -96,9 +83,9 @@ class EvaluationFunctor:
 
 		params = jp.vmap(self.jit_array_to_fdict)(gen) 		# convert array type gen to fdict
 
-		keys = jp.random_split(self.key, gen.shape[0]) 	# generate random keys for each individual
-		self.key = jp.random_split(keys[-1], 1)[0] 		# update key for next call
-		init_states = self.jit_env_reset(keys) 			# get different initial states for each individual
+		keys = jp.random_split(self.key, gen.shape[0]) 		# generate random keys for each individual
+		self.key = jp.random_split(keys[-1], 1)[0] 			# update key for next call
+		init_states = self.jit_env_reset(keys) 				# get different initial states for each individual
 
 		states, (rewards, metrics) = self.eval(init_states, params) # evaluate
 		for key in metrics:
