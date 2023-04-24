@@ -35,3 +35,16 @@ python3 brax_qd.py -e ant
 Pour reproduire l'erreur il faut décommenter les lignes de code de mise à jour des statistiques dans les fichiers situé dans le dossier diversity_algorithms_dev-master/diversity_algorithms/algorithms:
  - novelty_search.py: lignes 192-195 et lignes 313-317
  - quality_diversity.py: lignes 380-383 et lignes 495-498
+ 
+ 
+Consigne: 
+ 
+QDAX
+NS -> couverture de B
+QD -> couverture et QDSCORE et indiv fitmax en fonction nombre evaluation
+taille de pop différente
+taille du réseau de neuronnes
+cpu vs gpu
+fixe budget eval différente
+se comparé avec QDAX discussion
+se comparé avec diversity algo
