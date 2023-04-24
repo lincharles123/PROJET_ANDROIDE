@@ -91,6 +91,9 @@ class SimpleNeuralControllerFlax:
         """
         weights = [jnp.concatenate([self.weights['params'][k]['bias']] + [self.weights['params'][k]['kernel'].flatten()]) for k in self.keys]
         return jnp.concatenate(weights)
-    
+
+    def get_n_weights(self):
+        return self.n_weights
+
     # def __call__(self, obs):
     #     return self.model.apply(self.weights, obs)
