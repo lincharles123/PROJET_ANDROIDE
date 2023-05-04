@@ -1,24 +1,35 @@
 from flax import linen as nn
 from jax import random
 from jax import numpy as jnp
+from jax.nn.initializers import lecun_uniform
 from jax.lax import dynamic_slice
 import numpy as np
 from flax.core.frozen_dict import freeze
+from typing import Any, Callable, Tuple, Optional
+import jax
 
-class MLP(nn.Module):                    # create a Flax Module dataclass
+class MLP(nn.Module):
     n_out: int
     n_hidden_layers: int
     n_per_hidden: int
+    kernel_init: Callable[..., Any] = lecun_uniform()
+    activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.sigmoid
+    final_activation: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = nn.tanh
 
     @nn.compact
     def __call__(self, inputs):
         x = inputs
         for i in range(self.n_hidden_layers):
-            x = nn.Dense(self.n_per_hidden, name=f'layers_{i}')(x)
-            x = nn.sigmoid(x)
-        x = nn.Dense(self.n_out, name='layers_out')(x)
-        x = nn.tanh(x)
-        return x
+            x = nn.Dense(
+                self.n_per_hidden,
+                kernel_init=self.kernel_init,
+            )(x)
+            x = self.activation(x)
+        x = nn.Dense(
+            self.n_out,
+            kernel_init=self.kernel_init,
+        )(x)
+        return self.activation(x)
 
 
 class SimpleNeuralControllerFlax:
@@ -47,8 +58,15 @@ class SimpleNeuralControllerFlax:
         self.shapes = [(weights[k]['bias'].shape, weights[k]['kernel'].shape) for k in self.keys]
         self.n_weights = sum([np.prod(shape[0]) + np.prod(shape[1]) for shape in self.shapes])
     
-    
-    def array_to_fdict(self, flat_parameters):
+
+    def gen_indiv(self, size, random_key):
+        random_key, subkey = jax.random.split(random_key)
+        keys = jax.random.split(subkey, num=size)
+        fake_batch = jnp.zeros(shape=(size, self.dim_in))
+        new_gen = jax.vmap(jax.jit(self.model.init))(keys, fake_batch)
+        return new_gen, random_key
+
+    def array_to_dict(self, flat_parameters):
         """
         Set all network parameters from a single array
         """
@@ -60,40 +78,11 @@ class SimpleNeuralControllerFlax:
             i = i + shape[0][0]
             dict[key]['kernel'] = dynamic_slice(flat_parameters, (i,), (shape[1][0]*shape[1][1],)).reshape(shape[1])
             i = i + shape[1][0]*shape[1][1]
-        return freeze({'params': dict})
-    
+        return {'params': dict}
     
     def predict(self, params, obs):
         return self.model.apply(params, obs)
-    
-    # def set_parameters(self, flat_parameters):
-    #     """
-    #     Set all network parameters from a single array
-    #     """
-    #     if (np.nan in flat_parameters):
-    #         print("WARNING: NaN in the parameters of the NN: "+str(list(flat_parameters)))
-    #     if (max(flat_parameters)>1000):
-    #         print("WARNING: max value of the parameters of the NN >1000: "+str(list(flat_parameters)))
-    #     flat_parameters = np.array(flat_parameters)
-    #     i = 0 # index
-    #     dict = {}
-    #     for key, shape in zip(self.keys, self.shapes):
-    #         dict[key] = {}
-    #         dict[key]['bias'] = flat_parameters[i:i+np.prod(shape[0])].reshape(shape[0])
-    #         i += np.prod(shape[0])
-    #         dict[key]['kernel'] = flat_parameters[i:i+np.prod(shape[1])].reshape(shape[1])
-    #         i += np.prod(shape[1])
-    #     self.weights = freeze({'params': dict})
-    
-    def get_parameters(self):
-        """
-        Get all network parameters as a single array
-        """
-        weights = [jnp.concatenate([self.weights['params'][k]['bias']] + [self.weights['params'][k]['kernel'].flatten()]) for k in self.keys]
-        return jnp.concatenate(weights)
 
     def get_n_weights(self):
         return self.n_weights
 
-    # def __call__(self, obs):
-    #     return self.model.apply(self.weights, obs)

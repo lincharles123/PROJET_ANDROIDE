@@ -6,8 +6,7 @@ import numpy as np
 import datetime
 import os
 import array
-import jax
-from jax import numpy as jnp
+
 creator = None
 def set_creator(cr):
     global creator
@@ -25,6 +24,10 @@ from diversity_algorithms.algorithms.novelty_management import *
 
 import alphashape
 from shapely.geometry import Point, Polygon, LineString
+
+import jax
+from jax import numpy as jnp
+from diversity_algorithms.algorithms.jax_utils import *
 
 __all__=["novelty_ea"]
 
@@ -56,21 +59,18 @@ def dist_to_shapes(pp, ls):
 
 
 
-def build_toolbox_ns(evaluate,params,pool=None):
+def build_toolbox_ns(evaluate, params):
     toolbox = base.Toolbox()
 
     if(params["geno_type"] == "realarray"):
         print("** Using fixed structure networks (MLP) parameterized by a real array **")
         # With fixed NN
         # -------------
-        toolbox.register("attr_float", lambda : random.uniform(params["min"], params["max"]))
-        
-        toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=params["ind_size"])
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register("population", init_pop, ind_size=params["ind_size"], min_val=params["min"], max_val=params["max"])
         #toolbox.register("mate", tools.cxBlend, alpha=params["alpha"])
     
         # Polynomial mutation with eta=15, and p=0.1 as for Leni
-        toolbox.register("mutate", tools.mutPolynomialBounded, eta=params["eta_m"], indpb=params["indpb"], low=params["min"], up=params["max"])
+        toolbox.register("mutate", mutate, eta=params["eta_m"], min_val=params["min"], max_val=params["max"], indpb=params["indpb"])
     else:
         raise RuntimeError("Unknown genotype type %s" % geno_type)
 
@@ -94,7 +94,7 @@ def build_toolbox_ns(evaluate,params,pool=None):
     return toolbox
 
 ## DEAP compatible algorithm
-def novelty_ea(evaluate, params, pool=None):
+def novelty_ea(evaluate, params, random_key):
     """Novelty Search algorithm
 
     Novelty Search algorithm. Parameters:
@@ -127,10 +127,9 @@ def novelty_ea(evaluate, params, pool=None):
 
     lambda_ = int(params["lambda"]*params["pop_size"])
 
-    toolbox=build_toolbox_ns(evaluate,params,pool)
+    toolbox=build_toolbox_ns(evaluate,params)
 
-    population = toolbox.population(n=params["pop_size"])
-
+    population, random_key = toolbox.population(params["pop_size"], random_key)
     logbook = tools.Logbook()
     logbook.header = ['gen', 'nevals']
 
@@ -141,16 +140,16 @@ def novelty_ea(evaluate, params, pool=None):
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
+    gens = [ind.genotype for ind in invalid_ind]
     nb_eval+=len(invalid_ind)
-
-    fitnesses = toolbox.map_eval(invalid_ind)
+    
+    fitnesses, random_key = toolbox.map_eval(jnp.asarray(gens), random_key)
     # fit is a list of fitness (that is also a list) and behavior descriptor
 
     for ind, fit in zip(invalid_ind, fitnesses):
         ind.fit = fit[0] # fit is an attribute just used to store the fitness value
         ind.parent_bd=None
-
-        ind.bd=listify(fit[1])
+        ind.bd = fit[1]
         ind.id = generate_uuid()
         ind.parent_id = None
 
@@ -204,7 +203,8 @@ def novelty_ea(evaluate, params, pool=None):
 
         if (gen==params["restart"]):
             print("Restart: we reinitialize the population")
-            offspring = toolbox.population(n=lambda_)
+            offspring, random_key = toolbox.population(lambda_, random_key)
+
             for ind in offspring:
                 ind.bd=None
                 ind.id = generate_uuid()
@@ -212,11 +212,12 @@ def novelty_ea(evaluate, params, pool=None):
             population=[]
         else:
             # Vary the population
-            offspring = algorithms.varOr(population, toolbox, lambda_, params["cxpb"], params["mutpb"])
+            offspring, random_key = varOr(population, random_key, toolbox, lambda_, params["cxpb"], params["mutpb"])
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        fitnesses = toolbox.map_eval(invalid_ind)
+        gens = jnp.asarray([ind.genotype for ind in invalid_ind])
+        fitnesses, random_key = toolbox.map_eval(gens, random_key)
         nb_eval+=len(invalid_ind)
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fit = fit[0]
@@ -224,7 +225,7 @@ def novelty_ea(evaluate, params, pool=None):
             ind.parent_bd=ind.bd
             ind.parent_id=ind.id
             ind.id = generate_uuid()
-            ind.bd=listify(fit[1])
+            ind.bd = fit[1]
 
         for ind in population:
             ind.am_parent=1
@@ -241,7 +242,6 @@ def novelty_ea(evaluate, params, pool=None):
         elif (params["freeze_pop"]==-1) or (gen<=params["freeze_pop"]):
             pop_for_novelty_estimation=list(pq)
 
-
         archive=updateNovelty(pq,offspring,archive,params, pop_for_novelty_estimation)
         #alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
         isortednov=sorted(range(len(pq)), key=lambda k: pq[k].novelty, reverse=True)
@@ -253,7 +253,7 @@ def novelty_ea(evaluate, params, pool=None):
             if (ind.parent_bd is None):
                 ind.dist_to_parent=0
             else:
-                ind.dist_to_parent=np.linalg.norm(np.array(ind.bd)-np.array(ind.parent_bd))
+                ind.dist_to_parent=np.linalg.norm(ind.bd-ind.parent_bd)
             if (emo):
                 if (varian == "NS+Fit"):
                     ind.fitness.values = (ind.novelty, ind.fit)
@@ -261,13 +261,13 @@ def novelty_ea(evaluate, params, pool=None):
                     if (ind.parent_bd is None):
                         bddistp=0
                     else:
-                        bddistp=np.linalg.norm(np.array(ind.bd) - np.array(ind.parent_bd))
+                        bddistp=np.linalg.norm(ind.bd - ind.parent_bd)
                     ind.fitness.values = (ind.novelty, bddistp)
                 elif (varian == "NS+Fit+BDDistP"):
                     if (ind.parent_bd is None):
                         bddistp=0
                     else:
-                        bddistp=np.linalg.norm(np.array(ind.bd) - np.array(ind.parent_bd))
+                        bddistp=np.linalg.norm(ind.bd - ind.parent_bd)
                     ind.fitness.values = (ind.novelty, ind.fit, bddistp)
                 else:
                     print("WARNING: unknown variant: "+variant)

@@ -109,11 +109,7 @@ def create_functor(params, controller_params):
     eval_func = evaluator_class(**evaluator_params)
     return eval_func
 
-def preparing_run(eval_gym, params, with_scoop=False, deap=True):
-
-    if with_scoop:
-        from scoop import futures
-
+def preparing_run(eval_gym, params, deap=True):
     # Dumping how the run has been launched
     if ("run_dir_name" in params.keys()) and (params["run_dir_name"].get_value()!=""):      
         print("Run dir name: "+params["run_dir_name"].get_value())
@@ -197,15 +193,10 @@ def preparing_run(eval_gym, params, with_scoop=False, deap=True):
         print("WARNING: grid features have not been defined for env "+sparams["env_name"]+". This will have no impact on the run, except that the coverage statistic has been turned off")
     if (sparams["dump_period_evolvability"]>0) and (evolvability_nb_samples>0):
         print("WARNING, evolvability_nb_samples>0. The run will last much longer...")
-
-    if with_scoop:
-        pool=futures
-    else:
-        pool=None
         
     dump_params(sparams,run_name)
 
-    return sparams, pool
+    return sparams
 
 def terminating_run(sparams, pop, archive, logbook, nb_eval):
 

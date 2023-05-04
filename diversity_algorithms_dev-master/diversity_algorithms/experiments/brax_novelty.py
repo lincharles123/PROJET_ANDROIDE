@@ -30,6 +30,7 @@ from diversity_algorithms.experiments.exp_utils import *
 
 # issues with memory allocation in jax
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "False"
+import jax
 
 # declaration of params: RunParam(short_name (single letter for call from command line), default_value, doc)
 params={
@@ -61,10 +62,11 @@ params={
 	"freeze_pop": RunParam("F", -1, "generation at which to freeze the population taken into account to estimate novelty, -1 means no freeze (control experiment)"),
 	"pop_for_novelty_estimation": RunParam("P", 1, "Use pop (1) or not(0) in the novelty estimation (control experiment)"),
     "restart": RunParam("r", -1, "generation at which to restart, i.e. to reinitialize the population to random individuals (control experiment)"),
+	"seed": RunParam("k", 0, "random seed"),
+	"episode_length": RunParam("L", 100, "episode length"),
 }
 
 analyze_params(params, sys.argv)
-
 
 # Controller definition :
 # Parameters of the neural net
@@ -81,18 +83,12 @@ creator.create("Individual", list, typecode="d", fitness=creator.FitnessMax)
 set_creator(creator)
 
 
-# DO NOT pass the functor directly to futures.map -- this creates memory leaks
-# Wrapper that evals with the local functor
-def eval_with_functor(g):
-	return eval_func(g)
-
 # THIS IS IMPORTANT or the code will be executed in all workers
 if(__name__=='__main__'):
 	# Get env and controller
-
-	sparams, pool = preparing_run(eval_func, params)
-
-	pop, archive, logbook, nb_eval = novelty_ea(eval_with_functor, sparams, None)
+	random_key = jax.random.PRNGKey(params["seed"].get_value())
+	sparams = preparing_run(eval_func, params)
+	pop, archive, logbook, nb_eval = novelty_ea(eval_func, sparams, random_key)
 
 	terminating_run(sparams, pop, archive, logbook, nb_eval)
 	sys.exit()

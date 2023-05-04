@@ -137,8 +137,7 @@ registered_environments["ant"] = {
 	"bd_func": ant_behavior_descriptor,
 	"eval": brax_env.EvaluationFunctor,
 	"eval_params": {
-		"gym_env_name":"ant",
-		"gym_params":{},
+		"env_name":"ant",
 		"output":"final_reward"}, # Default
 	"grid_features": {
 		"min_x": [-600,-600],
@@ -151,8 +150,7 @@ registered_environments["humanoid"] = {
 	"bd_func": ant_behavior_descriptor,
 	"eval": brax_env.EvaluationFunctor,
 	"eval_params": {
-		"gym_env_name":"humanoid",
-		"gym_params":{},
+		"env_name":"humanoid",
 		"output":"final_reward"}, # Default
 	"grid_features": {
 		"min_x": [-600,-600],
