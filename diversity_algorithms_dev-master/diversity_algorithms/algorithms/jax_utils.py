@@ -39,6 +39,9 @@ def mutate(random_key, gen, eta, min_val, max_val, indpb):
 
 
 def varOr(random_key, population, toolbox, lambda_, cxpb, mutpb):
+	"""
+	The mutation calcution on itself is very fast but the creation of the offspring is slow.
+	"""
 	random_key, mut_key = jax.random.split(random_key)
  
 	mut_ind = jnp.arange(len(population))
@@ -47,11 +50,41 @@ def varOr(random_key, population, toolbox, lambda_, cxpb, mutpb):
 	# Mutate the geneotypes
 	random_key, subkey = jax.random.split(random_key)
 	keys = jax.random.split(subkey, mut_ind.shape[0])
-	mutate_gen = jax.vmap(toolbox.mutate)(keys, jnp.array(population)[mut_ind])
+	mutate_gen = jax.vmap(toolbox.mutate)(keys, jnp.asarray(population)[mut_ind])
 	
-	offspring = []
-	for i in range(len(population)):
-		off = toolbox.clone(population[i])
-		off[:] = mutate_gen[i]
-		offspring.append(off)
+	# Create the offsprings
+	offspring = [creator.Individual([x]) for x in np.asarray(mutate_gen)]
+	for i in range(len(offspring)):
+		offspring[i] =  offspring[i][0]
+		offspring[i].fitness = creator.FitnessMax()
+
+	# Copy bd and id from the mutated individuals
+	bd_id = [(population[i].bd, population[i].id) for i in mut_ind]
+	for ind, val in zip(offspring, bd_id):
+		ind.bd = val[0]
+		ind.id = val[1]
+
 	return offspring, random_key
+
+
+def selBest(population, size, fit_attr="fitness"):
+	values = np.asarray(([getattr(ind, fit_attr) for ind in population]))
+	index = np.argsort(values)[-size:]
+	return [population[i] for i in index]
+
+
+def init_pop(random_key, size, params):
+	""" 
+	Weird behavior of creator.Individual, it is very slow when giving it an array but if given 
+	the array wrapped in a list it is working fine.
+	=> We create the population with jax and then wrap it in a list to create the individuals.
+	   Then we get the array out of the list for each individual and initialize a new fitness.
+	"""
+	random_key, subkey = jax.random.split(random_key)
+	all = jax.random.uniform(subkey, (size,params["ind_size"]), jnp.float32, params["min"], params["max"],)
+	population = [creator.Individual([x]) for x in np.asarray(all)]
+	for i in range(len(population)):
+		population[i] =  population[i][0]
+		population[i].fitness = creator.FitnessMax()
+	return population, random_key
+

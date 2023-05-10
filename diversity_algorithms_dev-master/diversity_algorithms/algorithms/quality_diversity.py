@@ -71,8 +71,8 @@ class StructuredGrid:
 		self.kd_update_scheme = kd_update_scheme
 		self.bins_per_dim = bins_per_dim
 		self.dims_ranges = dims_ranges
-		self.mins = np.array([r[0] for r in self.dims_ranges])
-		self.maxs = np.array([r[1] for r in self.dims_ranges])
+		self.mins = np.asarray([r[0] for r in self.dims_ranges])
+		self.maxs = np.asarray([r[1] for r in self.dims_ranges])
 		self.grid = dict()
 		self.with_novelty = compute_novelty
 		self.k = k_nov_knn
@@ -109,9 +109,9 @@ class StructuredGrid:
 		dists=[]
 		# Handle the extra_indivs
 		for ind in extra_indivs:
-			dists.append(np.linalg.norm(np.array(bd)-np.array(ind.bd)))
+			dists.append(np.linalg.norm(np.asarray(bd)-np.asarray(ind.bd)))
 		# Query KNN in archive
-		dists_archive, _ = self.kdtree.query(np.array(bd),self.k+1, workers=-1)
+		dists_archive, _ = self.kdtree.query(np.asarray(bd),self.k+1, workers=-1)
 		dists += list(dists_archive)
 		dists.sort()
 		if(in_archive):
@@ -128,8 +128,8 @@ class StructuredGrid:
 			self.update_novelty()
 
 	def bd_to_bin(self,bd):
-		normbd = (np.array(bd) - self.mins)/(self.maxs - self.mins)
-		bins = np.array(normbd*self.bins_per_dim, dtype=int)
+		normbd = (np.asarray(bd) - self.mins)/(self.maxs - self.mins)
+		bins = np.asarray(normbd*self.bins_per_dim, dtype=int)
 		return tuple(bins)
 
 	def try_add(self,indiv):
@@ -189,7 +189,7 @@ class UnstructuredArchive:
 		return list(self.archive)
 
 	def _rebuild_kdtree(self):
-		self.kdtree=KDTree([ind.bd for ind in self.archive])
+		self.kdtree = KDTree([ind.bd for ind in self.archive])
 
 	def update_novelty(self):
 		# 1) Build KD tree
@@ -203,9 +203,9 @@ class UnstructuredArchive:
 		dists=[]
 		# Handle the extra_indivs
 		for ind in extra_indivs:
-			dists.append(np.linalg.norm(np.array(bd)-np.array(ind.bd)))
+			dists.append(np.linalg.norm(np.asarray(bd)-np.asarray(ind.bd)))
 		# Query KNN in archive
-		dists_archive, _ = self.kdtree.query(np.array(bd),self.k+1, workers=-1)
+		dists_archive, _ = self.kdtree.query(np.asarray(bd),self.k+1, workers=-1)
 		dists += list(dists_archive)
 		dists.sort()
 		if(in_archive):
@@ -222,7 +222,7 @@ class UnstructuredArchive:
 			self.update_novelty()
 	
 	
-	def try_add(self,indiv):
+	def try_add(self, indiv):
 		bd = indiv.bd
 		close_neighbors = ([] if((self.kdtree is None) or (self.r == 0)) else self.kdtree.query_ball_point(bd, self.r, workers=-1))
 		if not close_neighbors: # No neighbors in ball, no problem - add indiv
@@ -270,10 +270,7 @@ def build_toolbox_qd(evaluate, params):
         print("** Using fixed structure networks (MLP) parameterized by a real array **")
         # With fixed NN
         # -------------
-        toolbox.register("attr_float", lambda : random.uniform(params["min"], params["max"]))
-        
-        toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=params["ind_size"])
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register("population", init_pop, params=params)
         #toolbox.register("mate", tools.cxBlend, alpha=params["alpha"])
     
         # Polynomial mutation with eta=15, and p=0.1 as for Leni
@@ -317,21 +314,21 @@ def QDEa(evaluate, params, random_key):
 
 	# Evaluate the seed population
 	nb_eval += len(seed_population)
-	fitnesses, random_key = toolbox.map_eval(seed_population, random_key)
+	fit, bd, random_key = toolbox.map_eval(jnp.asarray(population), random_key)
 	# fit is a list of fitness (that is also a list) and behavior descriptor
 
-	for ind, fit in zip(seed_population, fitnesses):
-		ind.fitness.values = fit[0]
-		ind.fit = fit[0]
-		ind.parent_bd=None
-		ind.bd=listify(fit[1])
+	for ind, f, b in zip(population, fit, bd):
+		ind.fitness.values = f
+		ind.fit = f
+		ind.parent_bd = None
+		ind.bd = b
 		ind.id = generate_uuid()
 		ind.parent_id = None
 		ind.dist_parent = -1
 		ind.gen_created = 0
 
-	for ind in seed_population:
-		ind.am_parent=0
+	for ind in population:
+		ind.am_parent = 0
 	
 	# Warnings
 	if((params["archive_type"] == "unstructured") and (params["kdtree_update"] == "delayed")):
@@ -350,7 +347,7 @@ def QDEa(evaluate, params, random_key):
 		if(params["unstructured_neighborhood_radius"] < 0):
 			#Fetch behavior space dimensions
 			gridinfo = registered_environments[params["env_name"]]["grid_features"]
-			avg_dim_sizes = np.mean(np.array(gridinfo["max_x"]) - np.array(gridinfo["min_x"]))
+			avg_dim_sizes = np.mean(np.asarray(gridinfo["max_x"]) - np.asarray(gridinfo["min_x"]))
 			params["unstructured_neighborhood_radius"] = avg_dim_sizes / (2*gridinfo["nb_bin"])
 			print("Unstructured archive replace radius autoset to %f" % params["unstructured_neighborhood_radius"])
 		archive = UnstructuredArchive(seed_population, r_ball_replace=params["unstructured_neighborhood_radius"], replace_strategy=replace_strategies[params["replace_strategy"]], k_nov_knn=params["k_nov"], kd_update_scheme=params["kdtree_update"])
@@ -398,7 +395,7 @@ def QDEa(evaluate, params, random_key):
 #		for ind in population:
 #			print ("* ind %s novelty %f bd %s" % (ind.id, ind.novelty, str(ind.bd)))
 		
-		parents = list(population)
+		parents = population
 		# We will select - at random - n_add parents from the sampled ones
 		random.shuffle(parents)
 		parents = parents[:params["n_add"]]
@@ -406,24 +403,32 @@ def QDEa(evaluate, params, random_key):
 		# Vary the population
 		#offspring = algorithms.varOr(parents, toolbox, params["n_add"], params["cxpb"], params["mutpb"])
 		# varOr does random sampling in the parents -_- we don't want that
-		offspring = list()
-		for p in parents:
-			ind = toolbox.clone(p)
-			ind, = toolbox.mutate(ind)
-			del ind.fitness.values
-			offspring.append(ind)
-		
+  
+		# Mutate the geneotypes
+		random_key, subkey = jax.random.split(random_key)
+		keys = jax.random.split(subkey, len(parents))
+		mutate_gen = jax.vmap(toolbox.mutate)(keys, jnp.asarray(parents))
+			
+		# Create the offsprings
+		offspring = [creator.Individual([x]) for x in np.asarray(mutate_gen)]
+		for i in range(len(offspring)):
+			offspring[i] =  offspring[i][0]
+			offspring[i].fitness = creator.FitnessMax()
+			ind.bd = parents[i].bd
+			ind.id = parents[i].id
+
 		
 		# Evaluate the offspring
-		fitnesses = toolbox.map_eval(offspring)
-		for ind, fit in zip(offspring, fitnesses):
-			ind.fitness.values = fit[0] 
-			ind.fit = fit[0]
-			ind.parent_bd=ind.bd
-			ind.bd=listify(fit[1])
+		fit, bd, random_key = toolbox.map_eval(jnp.array(population), random_key)
+  
+		for ind, f, b in zip(offspring, fit, bd):
+			ind.fitness.values = f
+			ind.fit = f
+			ind.parent_bd = ind.bd
+			ind.bd = b
 			ind.parent_id = ind.id
 			ind.id = generate_uuid()
-			ind.am_parent=0
+			ind.am_parent = 0
 			ind.dist_parent = get_bd_dist_to_parent(ind)
 			ind.gen_created = gen
 		

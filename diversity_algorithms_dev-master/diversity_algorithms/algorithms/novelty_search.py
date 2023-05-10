@@ -5,7 +5,7 @@ from scipy.spatial import KDTree
 import numpy as np
 import datetime
 import os
-import array
+import time
 
 creator = None
 def set_creator(cr):
@@ -66,9 +66,7 @@ def build_toolbox_ns(evaluate, params):
 		print("** Using fixed structure networks (MLP) parameterized by a real array **")
 		# With fixed NN
 		# -------------
-		toolbox.register("attr_float", lambda : np.random.uniform(params["min"], params["max"], params["ind_size"]))
-		toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.attr_float)
-		toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+		toolbox.register("population", init_pop, params=params)
 		#toolbox.register("mate", tools.cxBlend, alpha=params["alpha"])
 	
 		# Polynomial mutation with eta=15, and p=0.1 as for Leni
@@ -81,13 +79,13 @@ def build_toolbox_ns(evaluate, params):
 	v=str(params["variant"])
 	variant=v.replace(",","")
 	if (variant == "NS"): 
-		toolbox.register("select", tools.selBest, fit_attr='novelty')
+		toolbox.register("select", selBest, fit_attr='novelty')
 	elif (variant == "Fit"):
-		toolbox.register("select", tools.selBest, fit_attr='fitness')
+		toolbox.register("select", selBest, fit_attr='fitness')
 	elif (variant == "Random"):
 		toolbox.register("select", random.sample)
 	elif (variant == "DistExplArea"):
-		toolbox.register("select", tools.selBest, fit_attr='dist_to_explored_area')
+		toolbox.register("select", selBest, fit_attr='dist_to_explored_area')
 	else:
 		print("Variant not among the authorized variants (NS, Fit, Random, DistExplArea), assuming multi-objective variant")
 		toolbox.register("select", tools.selNSGA2)
@@ -131,7 +129,8 @@ def novelty_ea(evaluate, params, random_key):
 
 	toolbox = build_toolbox_ns(evaluate,params)
 
-	population = toolbox.population(params["pop_size"])
+	population, random_key = toolbox.population(random_key, params["pop_size"])
+	
 	logbook = tools.Logbook()
 	logbook.header = ['gen', 'nevals']
 
@@ -141,7 +140,7 @@ def novelty_ea(evaluate, params, random_key):
 		logbook.header += params["stats_offspring"].fields
 
 	# Evaluate the individuals
-	fit, bd, random_key = toolbox.map_eval(jnp.array(population), random_key)
+	fit, bd, random_key = toolbox.map_eval(jnp.asarray(population), random_key)
 	nb_eval += bd.shape[0]
 	
 	for ind, f, b in zip(population, fit, bd):
@@ -168,7 +167,7 @@ def novelty_ea(evaluate, params, random_key):
 	varian=params["variant"].replace(",","")
 
 	for i,ind in enumerate(population):
-		#ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
+		ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
 		ind.rank_novelty = rank[i]
 		ind.dist_to_parent=0
 		if (emo): 
@@ -201,22 +200,27 @@ def novelty_ea(evaluate, params, random_key):
 		
 	# Begin the generational process
 	for gen in range(1, params["nb_gen"] + 1):
+		print("Generation %d" % gen)
 		if (gen==params["restart"]):
 			print("Restart: we reinitialize the population")
-			offspring = toolbox.population(lambda_)
-
-			for desc in offspring.descriptors:
-				ind.bd = None
-				desc.id = generate_uuid()
-				ind.parent_id = None
+			offspring, random_key = toolbox.population(random_key, params["pop_size"])
 			
+			for ind in offspring:
+				ind.bd=None
+				ind.id = generate_uuid()
+				ind.parent_id = None
+    
 			population=[]
 		else:
 			# Vary the population
+			t = time.time()
 			offspring, random_key = varOr(random_key, population, toolbox, lambda_, params["cxpb"], params["mutpb"])
-
+			print("Mutation time: ", time.time() - t)
+   
 		# Evaluate the individuals with an invalid fitness
-		fit, bd, random_key = toolbox.map_eval(jnp.array(offspring), random_key)
+		t = time.time()
+		fit, bd, random_key = toolbox.map_eval(jnp.asarray(offspring), random_key)
+		print("Evaluation time: ", time.time() - t)
 		nb_eval += bd.shape[0]
 
 		for ind, f, b in zip(offspring, fit, bd):
@@ -243,10 +247,13 @@ def novelty_ea(evaluate, params, random_key):
 		elif (params["freeze_pop"]==-1) or (gen<=params["freeze_pop"]):
 			pop_for_novelty_estimation = pq
 
+		t = time.time()
 		archive = updateNovelty(pq, offspring, archive, params, pop_for_novelty_estimation)
-		
+		print("Novelty update time: ", time.time() - t)		
+  
 		alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
 		
+		t = time.time()
 		# Compute the novelty rank
 		nov = [ind.novelty for ind in pq]
 		isortednov = np.argsort(nov)[::-1]
@@ -254,13 +261,13 @@ def novelty_ea(evaluate, params, random_key):
 		rank[isortednov] = np.arange(len(isortednov))
 		
 		for i,ind in enumerate(pq):
-			ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
+			ind.dist_to_explored_area = dist_to_shapes(ind.bd,alpha_shape)
 			ind.rank_novelty = rank[i]
 			#print("Indiv #%d: novelty=%f rank=%d"%(i, ind.novelty, ind.rank_novelty))
 			if (ind.parent_bd is None):
 				ind.dist_to_parent=0
 			else:
-				ind.dist_to_parent=np.linalg.norm(np.array(ind.bd)-np.array(ind.parent_bd))
+				ind.dist_to_parent=np.linalg.norm(np.asarray(ind.bd)-np.asarray(ind.parent_bd))
 			if (emo):
 				if (varian == "NS+Fit"):
 					ind.fitness.values = (ind.novelty, ind.fit)
@@ -268,20 +275,20 @@ def novelty_ea(evaluate, params, random_key):
 					if (ind.parent_bd is None):
 						bddistp=0
 					else:
-						bddistp=np.linalg.norm(np.array(ind.bd) - np.array(ind.parent_bd))
+						bddistp=np.linalg.norm(np.asarray(ind.bd) - np.asarray(ind.parent_bd))
 					ind.fitness.values = (ind.novelty, bddistp)
 				elif (varian == "NS+Fit+BDDistP"):
 					if (ind.parent_bd is None):
 						bddistp=0
 					else:
-						bddistp=np.linalg.norm(np.array(ind.bd) - np.array(ind.parent_bd))
+						bddistp=np.linalg.norm(np.asarray(ind.bd) - np.asarray(ind.parent_bd))
 					ind.fitness.values = (ind.novelty, ind.fit, bddistp)
 				else:
 					print("WARNING: unknown variant: "+variant)
 					ind.fitness.values=ind.fit
 			else:
 				ind.fitness.values=ind.fit
-
+		print("Data updating time: ", time.time() - t)
 
 		if (verbosity(params)):
 			print("Gen %d"%(gen))
@@ -295,10 +302,12 @@ def novelty_ea(evaluate, params, random_key):
 
 		
 		# Select the next generation population
+		t =  time.time()
 		if ("," in variant):
 			population[:] = toolbox.select(offspring, params["pop_size"])		
 		else:
 			population[:] = toolbox.select(pq, params["pop_size"])		
+		print("Selection time: ", time.time() - t)
 
 		if (("eval_budget" in params.keys()) and (params["eval_budget"]!=-1) and (nb_eval>=params["eval_budget"])): 
 			params["nb_gen"]=gen
@@ -310,7 +319,6 @@ def novelty_ea(evaluate, params, random_key):
 		dump_data(population, gen, params, prefix="bd", complementary_name="population", attrs=["bd"], force=terminates)
 		dump_data(offspring, gen, params, prefix="bd", complementary_name="offspring", attrs=["bd"], force=terminates)
 		dump_data(archive.get_content_as_list(), gen, params, prefix="archive", attrs=["all"], force=terminates)
-
 		
 		# Update the statistics with the new population
 		# record = params["stats"].compile(population) if params["stats"] is not None else {}

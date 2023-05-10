@@ -59,13 +59,6 @@ class SimpleNeuralControllerFlax:
         self.n_weights = sum([np.prod(shape[0]) + np.prod(shape[1]) for shape in self.shapes])
     
 
-    def gen_indiv(self, random_key, size):
-        random_key, subkey = jax.random.split(random_key)
-        keys = jax.random.split(subkey, num=size)
-        fake_batch = jnp.zeros(shape=(size, self.dim_in))
-        new_gen = jax.vmap(jax.jit(self.model.init))(keys, fake_batch)
-        return new_gen, random_key
-
     def array_to_dict(self, flat_parameters):
         """
         Set all network parameters from a single array
@@ -80,8 +73,10 @@ class SimpleNeuralControllerFlax:
             i = i + shape[1][0]*shape[1][1]
         return {'params': dict}
     
+    
     def predict(self, params, obs):
         return self.model.apply(params, obs)
+
 
     def get_n_weights(self):
         return self.n_weights

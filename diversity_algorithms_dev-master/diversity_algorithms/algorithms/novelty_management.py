@@ -42,7 +42,7 @@ class NovArchive:
         self.kdtree = KDTree(self.all_bd)
         #print("Archive updated, old size = %d, new size = %d"%(oldsize, self.all_bd.shape[0]))
     
-    def get_nov(self, popbd, population=jnp.array([])):
+    def get_nov(self, popbd, population=jnp.asarray([])):
         dpop = jnp.linalg.norm(popbd[:, None] - population, axis=2)
 
         if (self.kdtree is None):
@@ -86,8 +86,8 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
     if (archive) and (archive.size()+len(ref_pop)>=k):
         if (verbosity(params,["all", "novelty"])):
             print("Update Novelty. Archive size=%d"%(archive.size()))
-        pop_bd = jnp.array(np.array([ind.bd for ind in population]))
-        ref_bd = jnp.array(np.array([ind.bd for ind in ref_pop]))
+        pop_bd = jnp.asarray(np.asarray([ind.bd for ind in population]))
+        ref_bd = jnp.asarray(np.asarray([ind.bd for ind in ref_pop]))
         nov = archive.get_nov(pop_bd, population=ref_bd)    # compute the novelty of the population with respect to the archive
         for ind, n in zip(population, nov):
             if (jnp.isnan(n)):
@@ -126,7 +126,7 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
             print("Random archive update. Adding offspring: "+str(l[:_lambda])) 
         lbd=[offspring2[l[i]].bd for i in range(_lambda)]
     elif(add_strategy=="novel"):
-        nov = jnp.array(np.array([ind.novelty for ind in offspring2]))
+        nov = jnp.asarray(np.asarray([ind.novelty for ind in offspring2]))
         index = jnp.argsort(nov)
         ilast = index.shape[0] - 30
         lbd = [offspring2[i].bd for i in index[ilast:]]
@@ -142,7 +142,7 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
         print("ERROR: updateNovelty: unknown add strategy(%s), valid alternatives are \"random\" and \"novel\""%(add_strategy))
         return None
  
-    lbd = jnp.array(np.array(lbd))
+    lbd = jnp.asarray(np.asarray(lbd))
     if(archive==None):
         archive=NovArchive(lbd,k)
     else:
