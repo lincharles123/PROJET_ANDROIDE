@@ -33,7 +33,7 @@ class MLP(nn.Module):
 
 
 class SimpleNeuralControllerFlax:
-    def __init__(self, n_in, n_out, n_hidden_layers=2, n_neurons_per_hidden=5, params=None):
+    def __init__(self, n_in, n_out, n_hidden_layers=2, n_neurons_per_hidden=64, params=None):
         self.dim_in = n_in
         self.dim_out = n_out
         if (not params==None):
@@ -59,7 +59,7 @@ class SimpleNeuralControllerFlax:
         self.n_weights = sum([np.prod(shape[0]) + np.prod(shape[1]) for shape in self.shapes])
     
 
-    def gen_indiv(self, size, random_key):
+    def gen_indiv(self, random_key, size):
         random_key, subkey = jax.random.split(random_key)
         keys = jax.random.split(subkey, num=size)
         fake_batch = jnp.zeros(shape=(size, self.dim_in))

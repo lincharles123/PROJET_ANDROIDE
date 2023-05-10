@@ -22,6 +22,7 @@ from diversity_algorithms.analysis.data_utils import *
 
 from diversity_algorithms.environments import registered_environments # To get grid dimensions
 
+from diversity_algorithms.algorithms.jax_utils import *
 
 def criterion_fitness(ind):
 	return ind.fitness.values[0]
@@ -261,7 +262,7 @@ class UnstructuredArchive:
 
 
 
-def build_toolbox_qd(evaluate,params,pool=None):
+def build_toolbox_qd(evaluate, params):
          
     toolbox = base.Toolbox()
 
@@ -285,9 +286,9 @@ def build_toolbox_qd(evaluate,params,pool=None):
     v=str(params["variant"])
     variant=v.replace(",","")
     if (variant == "NS"): 
-        toolbox.register("select", tools.selBest, fit_attr='novelty')
+        toolbox.register("select", selBest, fit_attr='novelty')
     elif (variant == "Fit"):
-        toolbox.register("select", tools.selBest, fit_attr='fitness')
+        toolbox.register("select", selBest, fit_attr='fitness')
     else:
         toolbox.register("select", tools.selNSGA2)
         
@@ -297,10 +298,11 @@ def build_toolbox_qd(evaluate,params,pool=None):
 
 
 ## DEAP compatible algorithm
-def QDEa(evaluate, params, pool=None):
+def QDEa(evaluate, params, random_key):
 	"""QD algorithm
 	"""
-	toolbox=build_toolbox_qd(evaluate,params,pool)
+	toolbox=build_toolbox_qd(evaluate,params)
+
 
 	seed_population = toolbox.population(n=params["initial_seed_size"])
 		
@@ -314,8 +316,8 @@ def QDEa(evaluate, params, pool=None):
 		logbook.header += params["stats"].fields
 
 	# Evaluate the seed population
-	nb_eval+=len(seed_population)
-	fitnesses = toolbox.map_eval(seed_population)
+	nb_eval += len(seed_population)
+	fitnesses, random_key = toolbox.map_eval(seed_population, random_key)
 	# fit is a list of fitness (that is also a list) and behavior descriptor
 
 	for ind, fit in zip(seed_population, fitnesses):
@@ -373,9 +375,7 @@ def QDEa(evaluate, params, pool=None):
 	#Redefine the "initial population" as the archive content (maybe not all were added)
 	seed_population = archive.get_content_as_list()
 	
-	generate_evolvability_samples(params, seed_population, gen, toolbox)
-
-
+	# generate_evolvability_samples(params, seed_population, gen, toolbox)
 
 	# record = params["stats"].compile(seed_population) if params["stats"] is not None else {}
 	# logbook.record(gen=0, nevals=len(seed_population), **record)

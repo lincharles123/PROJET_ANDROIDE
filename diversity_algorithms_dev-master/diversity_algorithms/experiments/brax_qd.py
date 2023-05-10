@@ -35,6 +35,7 @@ from diversity_algorithms.experiments.exp_utils import *
 
 # issues with memory allocation in jax
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "False"
+import jax
 
 # declaration of params: RunParam(short_name (single letter for call from command line), default_value, doc)
 params={
@@ -67,14 +68,16 @@ params={
 	"k_nov": RunParam("", 15, "Number of neighbors to take into account for novelty computation"),
 	"geno_type": RunParam("G", "realarray", "type of genotype (only realarray is currently supported)"),
 	"eval_budget": RunParam("B", -1, "evaluation budget (ignored if -1). "),
-	}
+	"seed": RunParam("k", 0, "random seed"),
+	"episode_length": RunParam("L", 100, "episode length"),	
+ }
 
 analyze_params(params, sys.argv)
 
 
 # Controller definition :
 # Parameters of the neural net
-nnparams={"n_hidden_layers": 2, "n_neurons_per_hidden": 10}
+nnparams={"n_hidden_layers": 2, "n_neurons_per_hidden": 64}
 # Create a dict with all the properties of the controller
 controller_params = {"controller_type":SimpleNeuralController,"controller_params":nnparams}
 
@@ -84,20 +87,14 @@ eval_func = create_functor(params, controller_params)
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", list, typecode="d", fitness=creator.FitnessMax)
 
-# DO NOT pass the functor directly to futures.map -- this creates memory leaks
-# Wrapper that evals with the local functor
-def eval_with_functor(g):
-	return eval_func(g)
-
 
 # THIS IS IMPORTANT or the code will be executed in all workers
 if(__name__=='__main__'):
 	# Get env and controller
+	random_key = jax.random.PRNGKey(params["seed"].get_value())
+	sparams = preparing_run(eval_func, params)
 
-	sparams, pool=preparing_run(eval_func, params, None)
-	
-
-	archive, logbook, nb_eval = QDEa(eval_with_functor, sparams, pool)
+	archive, logbook, nb_eval = QDEa(eval_func, sparams, random_key)
 
 	terminating_run(sparams, None, archive, logbook, nb_eval)
 

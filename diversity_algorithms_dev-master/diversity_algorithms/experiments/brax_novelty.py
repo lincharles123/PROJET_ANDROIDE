@@ -70,7 +70,7 @@ analyze_params(params, sys.argv)
 
 # Controller definition :
 # Parameters of the neural net
-nnparams={"n_hidden_layers": 2, "n_neurons_per_hidden": 10}
+nnparams={"n_hidden_layers": 2, "n_neurons_per_hidden": 64}
 # Create a dict with all the properties of the controller
 controller_params = {"controller_type":SimpleNeuralController,"controller_params":nnparams}
 
@@ -79,7 +79,7 @@ eval_func = create_functor(params, controller_params)
 
 nbobj=params["variant"].get_value().count("+")+1
 creator.create("FitnessMax", base.Fitness, weights=(1.0,)*nbobj)
-creator.create("Individual", list, typecode="d", fitness=creator.FitnessMax)
+creator.create("Individual", np.ndarray, typecode="d", fitness=creator.FitnessMax)
 set_creator(creator)
 
 

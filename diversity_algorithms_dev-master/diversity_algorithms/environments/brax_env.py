@@ -102,12 +102,11 @@ class EvaluationFunctor:
 
 		# Change sign if needed
 		fitness = jax.lax.map(lambda x: sign * x, fitness)
-		if type(fitness[0]) is not list:
-			fitness = [[x] for x in fitness]
+		fitness = [[f] for f in fitness.tolist()]
 
 		if self.get_behavior_descriptor is None:
-			return fitness, random_key
+			raise RuntimeError("No behavior descriptor function defined")
 		else:
 			res = jax.lax.map(self.get_behavior_descriptor, metrics)
 			bd = jp.stack((res[0], res[1]), axis=1)
-			return [(f, r) for f, r in zip(fitness, bd)], random_key
+			return fitness, bd, random_key
