@@ -10,6 +10,8 @@ import os
 from diversity_algorithms.environments.behavior_descriptors import *
 
 from diversity_algorithms.environments import gym_env, dummy_env, brax_env
+from diversity_algorithms.environments import wrappers
+from brax.v1 import envs
 
 registered_environments = dict()
 
@@ -133,29 +135,36 @@ registered_environments["Billiard"] = {
 }
 
 
-registered_environments["ant"] = {
+registered_environments["ant-uni"] = {
 	"bd_func": ant_behavior_descriptor,
 	"eval": brax_env.EvaluationFunctor,
+	"wrapper": wrappers.FeetContactWrapper,
 	"eval_params": {
-		"env_name":"ant-uni",
+		"env_name":"ant",
 		"output":"final_reward"}, # Default
 	"grid_features": {
 		"min_x": [0, 0, 0, 0],
 		"max_x": [1, 1, 1, 1],
 		"nb_bin": 50
-	}
+	},
+	"kwargs": [{}, {}]
 }
 
 
-registered_environments["ant"] = {
-	"bd_func": ant_behavior_descriptor,
-	"eval": brax_env.EvaluationFunctor,
-	"eval_params": {
-		"env_name":"ant-omni",
-		"output":"final_reward"}, # Default
-	"grid_features": {
-		"min_x": [-15,-15],
-		"max_x": [15, 15],
-		"nb_bin": 50
-	}
-}
+def create(env_name,
+           episode_length = 100,
+           action_repeat = 1,
+           auto_reset = True,
+           **kwargs):
+	"""Creates an Env with a specified brax system."""
+	name = registered_environments[env_name]["eval_params"]["env_name"]
+	env = envs._envs[name](**kwargs)
+	if "wrapper" in registered_environments[env_name]:
+		
+		env = registered_environments[env_name]["wrapper"](env, name)
+	if episode_length is not None:
+		env = envs.wrappers.EpisodeWrapper(env, episode_length, action_repeat)
+	if auto_reset:
+		env = envs.wrappers.AutoResetWrapper(env)
+
+	return env  # type: ignore

@@ -1,7 +1,5 @@
 # coding: utf-8
 
-# pyMaze expriments
-
 from brax.v1 import envs
 from jax import numpy as jp
 import jax
@@ -9,12 +7,9 @@ from functools import partial
 
 # Fitness/evaluation function
 
-default_episode_length = 100  # same as C++ sferes experiments
-
-
 class EvaluationFunctor:
 	def __init__(self, env_name=None, controller=None, controller_type=None, controller_params=None,
-				 output='total_reward', episode_length=default_episode_length, bd_function=None):
+				 output='total_reward', episode_length=100, bd_function=None):
 
 		self.out = output
 		self.episode_length = episode_length
