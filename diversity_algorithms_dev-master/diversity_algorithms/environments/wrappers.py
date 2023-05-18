@@ -2,6 +2,8 @@ import jax.numpy as jnp
 from brax.v1 import envs
 from brax.v1.physics.system import System
 
+# citer QDAX, licence
+
 FEET_NAMES = {
     "ant": ["$ Body 4", "$ Body 7", "$ Body 10", "$ Body 13"],
     "halfcheetah": ["ffoot", "bfoot"],

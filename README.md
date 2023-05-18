@@ -9,7 +9,7 @@ conda activate your_env
 ```
 - Clonner le repo google/brax en local puis lancer la commande:
 ```sh
-cd brax-main
+cd brax
 pip install --upgrade pip
 pip install -e .
 ```
@@ -48,3 +48,10 @@ cpu vs gpu
 fixe budget eval différente
 se comparé avec QDAX discussion
 se comparé avec diversity algo
+
+nslc pour archive non structuré, récupère les point situé sur du front de pareto sur la pop est les ajoute
+recherche sur internet pour comparer avec cpu
+prendre un ratio pour ns et le justifier
+noter tout les point qui pose problème, essayer de trouver ce qui pose problème et donner des pistes d'amélioration
+citer les source dans les entete de fonction, regarder les licences
+22 mai 13H

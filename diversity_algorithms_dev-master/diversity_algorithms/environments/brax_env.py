@@ -4,11 +4,12 @@ from brax.v1 import envs
 from jax import numpy as jp
 import jax
 from functools import partial
+from diversity_algorithms.environments.environments import create
 
 # Fitness/evaluation function
 
 class EvaluationFunctor:
-	def __init__(self, env_name=None, controller=None, controller_type=None, controller_params=None,
+	def __init__(self, env_name=None, kwargs={}, controller=None, controller_type=None, controller_params=None,
 				 output='total_reward', episode_length=100, bd_function=None):
 
 		self.out = output
@@ -17,13 +18,13 @@ class EvaluationFunctor:
 		self.controller_type = controller_type
 		self.controller_params = controller_params
 		if (env_name is not None):
-			self.set_env(env_name)
+			self.set_env(env_name, episode_length, kwargs=kwargs)
 		else:
 			self.env = None
 		self.get_behavior_descriptor = bd_function
 
-	def set_env(self, env_name):
-		self.env = envs.create(env_name, episode_length=self.episode_length)
+	def set_env(self, env_name, kwargs):
+		self.env = create(env_name, episode_length=self.episode_length, kwargs=kwargs)
 		self.env_name = env_name
 		print("Environment set to", self.env_name)
 
