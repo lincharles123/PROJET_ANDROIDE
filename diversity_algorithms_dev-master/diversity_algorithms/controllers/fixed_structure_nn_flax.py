@@ -29,7 +29,7 @@ class MLP(nn.Module):
             self.n_out,
             kernel_init=self.kernel_init,
         )(x)
-        return self.activation(x)
+        return self.final_activation(x)
 
 
 class SimpleNeuralControllerFlax:
