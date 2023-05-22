@@ -69,7 +69,7 @@ class EvaluationFunctor:
 			states = carry
 			actions = self.inference_fn(params, states.obs)
 			next_states = self.step_fn(states, actions)
-			return (next_states), (next_states.reward, next_states.metrics, next_states.info)
+			return (next_states), (next_states.reward, next_states.metrics, actions, next_states.info)
 		return jax.lax.scan(eval_step, init_states, None, length=self.episode_length)
 
 	def __call__(self, genotypes, random_key):
@@ -89,21 +89,17 @@ class EvaluationFunctor:
 		keys = jax.random.split(subkey, gens.shape[0])  # generate random keys for each individual
 		init_states = self.reset_fn(keys) # get different initial states for each individual
 
-		states, (rewards, metrics, info) = self.eval(init_states, params)  # evaluate
+		states, (rewards, metrics, torque, info) = self.eval(init_states, params)  # evaluate
 
 		# Reshape to have shape (n_indiv, _)
 		metrics = jax.tree_map(lambda x: x.swapaxes(1, 0), metrics)
 		info = jax.tree_map(lambda x: x.swapaxes(1, 0), info)
+		torque = jax.tree_map(lambda x: x.swapaxes(1, 0), torque)
 		rewards = rewards.swapaxes(1, 0)
-
+		info["final_pos"] = jp.column_stack((states.metrics["x_position"], states.metrics["y_position"]))
+  
 		# Select fitness
 		outdata = str(self.out)
-		# Detect minus sign
-		if (outdata[0] == '-'):
-			outdata = outdata[1:]
-			sign = -1
-		else:
-			sign = 1
 
 		if (outdata == 'total_reward'):
 			fitness = jp.sum(rewards, axis=1)
@@ -111,14 +107,18 @@ class EvaluationFunctor:
 			fitness = states.reward
 		elif (outdata == None or self.out == 'none'):
 			fitness = [[None] for _ in range(gens.shape[0])]
-		elif (outdata in states.metrics):
-			fitness = jp.sum(metrics[outdata], axis=1)
+		elif len(outdata.split("+")) > 1:
+			fitness = jp.zeros((gens.shape[0],))
+			for out in outdata.split("+"):
+				if out == 'torque':
+					fitness = fitness - jp.sum(jp.mean(jp.abs(torque), axis=2), axis=1)
+				else:
+					fitness = fitness + jp.sum(metrics[out], axis=1)
 		else:
 			print("ERROR: No known output %s" % outdata)
 			return None
 
 		# Change sign if needed
-		fitness = jax.lax.map(lambda x: sign * x, fitness)
 		fitness = [[f] for f in fitness.tolist()]
 
 		if self.get_behavior_descriptor is None:

@@ -48,10 +48,10 @@ params={
 	"variant": RunParam("a", "NS", "variant of the Novelty Search algorithm"),
 	"cxpb": RunParam("", 0, "cross-over rate"), # No crossover
 	"mutpb": RunParam("",1., "mutation rate"),  # All offspring are mutated...
-	"indpb": RunParam("",0.1, "indiv probability"), # ...but only 10% of parameters are mutated
+	"indpb": RunParam("",0, "indiv probability"), # ...but only 10% of parameters are mutated
 	"eta_m": RunParam("", 15.0, "Eta parameter for polynomial mutation"),
-	"min": RunParam("", -5., "Min value of the genotype"), # WARNING, some variants do not use it at all. -5 seems reasonable for NN weights
-	"max": RunParam("", 5., "Min value of the genotype"), # WARNING, some variants do not use it at all. 5 seems reasonable for NN weights
+	"min": RunParam("", -1., "Min value of the genotype"), # WARNING, some variants do not use it at all. -5 seems reasonable for NN weights
+	"max": RunParam("", 1., "Min value of the genotype"), # WARNING, some variants do not use it at all. 5 seems reasonable for NN weights
 	"k": RunParam("", 15, "Number of neighbors to take into account for novelty computation"),
 	"add_strategy": RunParam("s", "random", "strategy for archive inclusion (random or novel)"),
 	"lambda_nov": RunParam("", 6, "number of indiv added to the archive at each gen"),

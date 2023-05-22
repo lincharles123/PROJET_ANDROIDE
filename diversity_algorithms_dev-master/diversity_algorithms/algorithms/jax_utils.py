@@ -39,7 +39,7 @@ def mutate(random_key, gen, eta, min_val, max_val, indpb):
 	new_gen = gen.at[mut_id].set(new_val)
 	return new_gen
 
-
+@partial(jax.jit, static_argnames={"alpha"})
 def cxBLend(random_key, gen1, gen2, alpha):
 	"""
 	Equivalent to deap algorithms.cxBlend but using jax to parrallelize the computation.

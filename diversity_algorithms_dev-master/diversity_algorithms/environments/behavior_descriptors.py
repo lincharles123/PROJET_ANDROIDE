@@ -42,5 +42,5 @@ def billiard_behavior_descriptor(traj):
 def feet_contact_descriptor(traj):
     return np.mean(traj["feet_contact"], axis=0)
 
-# def final_pos_descriptor(traj):
-# 	return traj["final_pos"]
+def final_pos_descriptor(traj):
+ 	return traj["final_pos"]
