@@ -85,7 +85,7 @@ controller_params = {"controller_type":SimpleNeuralController,"controller_params
 eval_func = create_functor(params, controller_params)
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-creator.create("Individual", list, typecode="d", fitness=creator.FitnessMax)
+creator.create("Individual", np.ndarray, typecode="d", fitness=creator.FitnessMax)
 
 
 # THIS IS IMPORTANT or the code will be executed in all workers

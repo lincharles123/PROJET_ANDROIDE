@@ -2,7 +2,32 @@ import jax.numpy as jnp
 from brax.v1 import envs
 from brax.v1.physics.system import System
 
-# citer QDAX, licence
+# Written according to QDax implementation:
+# https://github.com/adaptive-intelligent-robotics/QDax/blob/main/qdax/environments/locomotion_wrappers.py
+# wrapper to get the feet contact with the ground for behavior descriptor
+
+# MIT License
+
+# Copyright (c) 2022 Adaptive and Intelligent Robotics Lab and InstaDeep Ltd
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 
 FEET_NAMES = {
     "ant": ["$ Body 4", "$ Body 7", "$ Body 10", "$ Body 13"],
@@ -66,3 +91,4 @@ class FeetContactWrapper(envs.Wrapper):
         contacts = info.contact.vel
         return jnp.any(contacts[self._feet_contact_idx], axis=1).astype(jnp.float32)
     
+

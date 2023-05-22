@@ -66,7 +66,8 @@ def build_toolbox_ns(evaluate, params):
 		print("** Using fixed structure networks (MLP) parameterized by a real array **")
 		# With fixed NN
 		# -------------
-		toolbox.register("population", init_pop, params=params)
+		# toolbox.register("population", init_pop_numpy, params=params)
+		toolbox.register("population", init_pop_controller, controller=evaluate.get_controller())
 		#toolbox.register("mate", tools.cxBlend, alpha=params["alpha"])
 	
 		# Polynomial mutation with eta=15, and p=0.1 as for Leni
@@ -156,8 +157,13 @@ def novelty_ea(evaluate, params, random_key):
 	# Update the archive
 	archive=updateNovelty(population,population,None,params)
  
-	alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
+	bd_dimension = bd.shape[-1]
  
+	alpha_shape = None
+	# Only 2D and 3D BD are supported
+	if bd_dimension == 2 or bd_dimension == 3:
+		alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
+  
 	# Compute the novelty rank
 	nov = [ind.novelty for ind in population]
 	isortednov = np.argsort(nov)[::-1]
@@ -167,7 +173,8 @@ def novelty_ea(evaluate, params, random_key):
 	varian=params["variant"].replace(",","")
 
 	for i,ind in enumerate(population):
-		ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
+		if alpha_shape:
+			ind.dist_to_explored_area=dist_to_shapes(ind.bd,alpha_shape)
 		ind.rank_novelty = rank[i]
 		ind.dist_to_parent=0
 		if (emo): 
@@ -250,8 +257,10 @@ def novelty_ea(evaluate, params, random_key):
 		t = time.time()
 		archive = updateNovelty(pq, offspring, archive, params, pop_for_novelty_estimation)
 		print("Novelty update time: ", time.time() - t)		
-  
-		alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
+
+		# Only 2D and 3D BD are supported
+		if bd_dimension == 2 or bd_dimension == 3:
+			alpha_shape = alphashape.alphashape(archive.all_bd, alphas)
 		
 		t = time.time()
 		# Compute the novelty rank
@@ -261,7 +270,8 @@ def novelty_ea(evaluate, params, random_key):
 		rank[isortednov] = np.arange(len(isortednov))
 		
 		for i,ind in enumerate(pq):
-			ind.dist_to_explored_area = dist_to_shapes(ind.bd,alpha_shape)
+			if alpha_shape:
+				ind.dist_to_explored_area = dist_to_shapes(ind.bd,alpha_shape)
 			ind.rank_novelty = rank[i]
 			#print("Indiv #%d: novelty=%f rank=%d"%(i, ind.novelty, ind.rank_novelty))
 			if (ind.parent_bd is None):

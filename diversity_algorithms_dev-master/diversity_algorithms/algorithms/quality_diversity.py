@@ -64,7 +64,7 @@ replace_strategies = {"never": replace_never,
 
 class StructuredGrid:
 	""" Structured grid for MAP-Elite like stuff
-	    Also includes a KD-tree and maintain novelty scores
+		Also includes a KD-tree and maintain novelty scores
 	"""
 	def __init__(self, initial_pop, bins_per_dim, dims_ranges, replace_strategy=replace_never, compute_novelty=True, k_nov_knn=15, kd_update_scheme="default"):
 		self.dim = len(dims_ranges)
@@ -152,14 +152,16 @@ class StructuredGrid:
 
 	def sample_archive(self, n, strategy="random"):
 		allindivs = list(self.grid.values())
-		if(n >= self.size()): # If there are not enough (or just enough) indivs in the archive, return them all
-			return allindivs
-		elif(strategy=="random"):
-			indices = np.random.choice(self.size(), n, replace=False)
+		# not interesting for brax env where we should evaluate large population, and have static pop size
+		# if(n >= self.size()): # If there are not enough (or just enough) indivs in the archive, return them all
+		# 	return allindivs
+		if(strategy=="random"):
+			indices = np.random.choice(self.size(), n)
 		elif(strategy=="novelty"):
 			if not self.with_novelty:
 				print("ERROR: Requested novelty-based sampling but the grid was built with compute_novelty=False")
 				sys.exit(1)
+			proportion = [i*0.1 for i in range(1,11)]
 			novelties = [ind.novelty for ind in allindivs]
 			indices = np.argsort(novelties)[:-(n+1):-1]
 		else:
@@ -167,6 +169,11 @@ class StructuredGrid:
 			sys.exit(1)
 		return list([allindivs[i] for i in indices])
 
+	def get_best(self):
+		if(self.with_novelty):
+			return max(self.grid.values(), key=lambda x: x.novelty)
+		else:
+			return max(self.grid.values(), key=lambda x: x.fitness)
 
 class UnstructuredArchive:
 	""" Unstructured archive
@@ -247,10 +254,11 @@ class UnstructuredArchive:
 				return False
 
 	def sample_archive(self, n, strategy="random"):
-		if(n >= self.size()): # If there are not enough (or just enough) indivs in the archive, return them all
-			return list(self.archive) #return a copy
-		elif(strategy=="random"):
-			indices = np.random.choice(self.size(), n, replace=False)
+		# not interesting for brax env where we should evaluate large population, and have static pop size
+		# if(n >= self.size()): # If there are not enough (or just enough) indivs in the archive, return them all
+		# 	return list(self.archive) #return a copy
+		if(strategy=="random"):
+			indices = np.random.choice(self.size(), n)
 		elif(strategy=="novelty"):
 			novelties = [ind.novelty for ind in self.archive]
 			indices = np.argsort(novelties)[:-(n+1):-1]
@@ -261,36 +269,36 @@ class UnstructuredArchive:
 
 
 
-
 def build_toolbox_qd(evaluate, params):
-         
-    toolbox = base.Toolbox()
+		 
+	toolbox = base.Toolbox()
 
-    if(params["geno_type"] == "realarray"):
-        print("** Using fixed structure networks (MLP) parameterized by a real array **")
-        # With fixed NN
-        # -------------
-        toolbox.register("population", init_pop, params=params)
-        #toolbox.register("mate", tools.cxBlend, alpha=params["alpha"])
-    
-        # Polynomial mutation with eta=15, and p=0.1 as for Leni
-        toolbox.register("mutate", tools.mutPolynomialBounded, eta=params["eta_m"], indpb=params["indpb"], low=params["min"], up=params["max"])
-    else:
-        raise RuntimeError("Unknown genotype type %s" % geno_type)
+	if(params["geno_type"] == "realarray"):
+		print("** Using fixed structure networks (MLP) parameterized by a real array **")
+		# With fixed NN
+		# -------------
+		# toolbox.register("population", init_pop_numpy, params=params)
+		toolbox.register("population", init_pop_controller, controller=evaluate.get_controller())
+		#toolbox.register("mate", tools.cxBlend, alpha=params["alpha"])
+	
+		# Polynomial mutation with eta=15, and p=0.1 as for Leni
+		toolbox.register("mutate", mutate, eta=params["eta_m"], min_val=params["min"], max_val=params["max"], indpb=params["indpb"])
+	else:
+		raise RuntimeError("Unknown genotype type %s" % geno_type)
 
-    #Common elements - selection and evaluation
-    
-    v=str(params["variant"])
-    variant=v.replace(",","")
-    if (variant == "NS"): 
-        toolbox.register("select", selBest, fit_attr='novelty')
-    elif (variant == "Fit"):
-        toolbox.register("select", selBest, fit_attr='fitness')
-    else:
-        toolbox.register("select", tools.selNSGA2)
-        
-    toolbox.register("map_eval", evaluate)
-    return toolbox
+	#Common elements - selection and evaluation
+	
+	v=str(params["variant"])
+	variant=v.replace(",","")
+	if (variant == "NS"): 
+		toolbox.register("select", selBest, fit_attr='novelty')
+	elif (variant == "Fit"):
+		toolbox.register("select", selBest, fit_attr='fitness')
+	else:
+		toolbox.register("select", tools.selNSGA2)
+		
+	toolbox.register("map_eval", evaluate)
+	return toolbox
 
 
 
@@ -300,8 +308,7 @@ def QDEa(evaluate, params, random_key):
 	"""
 	toolbox=build_toolbox_qd(evaluate,params)
 
-
-	seed_population = toolbox.population(n=params["initial_seed_size"])
+	seed_population, random_key = toolbox.population(random_key, params["initial_seed_size"])
 		
 	#print("	 lambda=%d, mu=%d, cxpb=%.2f, mutpb=%.2f, ngen=%d, k=%d, lambda_nov=%d"%(lambda_,mu,cxpb,mutpb,ngen,k,lambdaNov)) #TODO replace
 
@@ -314,10 +321,10 @@ def QDEa(evaluate, params, random_key):
 
 	# Evaluate the seed population
 	nb_eval += len(seed_population)
-	fit, bd, random_key = toolbox.map_eval(jnp.asarray(population), random_key)
+	fit, bd, random_key = toolbox.map_eval(jnp.asarray(seed_population), random_key)
 	# fit is a list of fitness (that is also a list) and behavior descriptor
 
-	for ind, f, b in zip(population, fit, bd):
+	for ind, f, b in zip(seed_population, fit, bd):
 		ind.fitness.values = f
 		ind.fit = f
 		ind.parent_bd = None
@@ -327,7 +334,7 @@ def QDEa(evaluate, params, random_key):
 		ind.dist_parent = -1
 		ind.gen_created = 0
 
-	for ind in population:
+	for ind in seed_population:
 		ind.am_parent = 0
 	
 	# Warnings
@@ -395,11 +402,13 @@ def QDEa(evaluate, params, random_key):
 #		for ind in population:
 #			print ("* ind %s novelty %f bd %s" % (ind.id, ind.novelty, str(ind.bd)))
 		
+		# we should use large population in brax
+		# parents = population
+		# # We will select - at random - n_add parents from the sampled ones
+		# random.shuffle(parents)
+		# parents = parents[:params["n_add"]]
 		parents = population
-		# We will select - at random - n_add parents from the sampled ones
-		random.shuffle(parents)
-		parents = parents[:params["n_add"]]
-		
+  
 		# Vary the population
 		#offspring = algorithms.varOr(parents, toolbox, params["n_add"], params["cxpb"], params["mutpb"])
 		# varOr does random sampling in the parents -_- we don't want that
@@ -414,12 +423,12 @@ def QDEa(evaluate, params, random_key):
 		for i in range(len(offspring)):
 			offspring[i] =  offspring[i][0]
 			offspring[i].fitness = creator.FitnessMax()
-			ind.bd = parents[i].bd
-			ind.id = parents[i].id
+			offspring[i].bd = parents[i].bd
+			offspring[i].id = parents[i].id
 
 		
 		# Evaluate the offspring
-		fit, bd, random_key = toolbox.map_eval(jnp.array(population), random_key)
+		fit, bd, random_key = toolbox.map_eval(jnp.array(offspring), random_key)
   
 		for ind, f, b in zip(offspring, fit, bd):
 			ind.fitness.values = f
@@ -434,16 +443,17 @@ def QDEa(evaluate, params, random_key):
 		
 		if(len(offspring)) < params["n_add"]:
 			print("WARNING: Not enough parents sampled to get %d offspring; will complete with %d random individuals" % (params["n_add"], params["n_add"]-len(offspring)))
-			extra_random_indivs = toolbox.population(n=(params["n_add"]-len(offspring)))
-			extra_fitnesses = toolbox.map_eval(extra_random_indivs)
-			for ind, fit in zip(extra_random_indivs, extra_fitnesses):
-				ind.fitness.values = fit[0]
-				ind.fit = fit[0]
-				ind.parent_bd=None
-				ind.bd=listify(fit[1])
+			extra_random_indivs, random_key = toolbox.population(random_key, params["n_add"]-len(offspring))
+			extrat_fit, extra_bd, random_key = toolbox.map_eval(jnp.array(extra_random_indivs), random_key)
+			
+			for ind, f, b in zip(extra_random_indivs, extrat_fit, extra_bd):
+				ind.fitness.values = f
+				ind.fit = f
+				ind.parent_bd = None
+				ind.bd = b
 				ind.id = generate_uuid()
 				ind.parent_id = None
-				ind.am_parent=0
+				ind.am_parent = 0
 				ind.dist_parent = -1
 				ind.gen_created = gen
 			offspring += extra_random_indivs
@@ -462,6 +472,7 @@ def QDEa(evaluate, params, random_key):
 #			else:
 #				ind.novelty = archive.get_nov(ind.bd, in_archive=False)
 #		
+		print(len(offspring))
 		# Try to add the offspring to the archive
 		n_added = 0
 		for ind in offspring:

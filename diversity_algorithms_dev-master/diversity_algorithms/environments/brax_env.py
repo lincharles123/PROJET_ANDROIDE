@@ -1,11 +1,26 @@
 # coding: utf-8
 
-from brax.v1 import envs
 from jax import numpy as jp
 import jax
 from functools import partial
-from diversity_algorithms.environments.environments import create
+from diversity_algorithms.environments import wrappers
+from brax.v1 import envs
 
+def create(env_name,
+           episode_length = 100,
+           action_repeat = 1,
+           auto_reset = True,
+           **kwargs):
+	"""Creates an Env with a specified brax system."""
+	name = env_name.split('-')[0]
+	env = envs._envs[name]()
+	env = wrappers.FeetContactWrapper(env, name)
+	if episode_length is not None:
+		env = envs.wrappers.EpisodeWrapper(env, episode_length, action_repeat)
+	if auto_reset:
+		env = envs.wrappers.AutoResetWrapper(env)
+
+	return env  # type: ignore
 # Fitness/evaluation function
 
 class EvaluationFunctor:
@@ -18,7 +33,7 @@ class EvaluationFunctor:
 		self.controller_type = controller_type
 		self.controller_params = controller_params
 		if (env_name is not None):
-			self.set_env(env_name, episode_length, kwargs=kwargs)
+			self.set_env(env_name, kwargs)
 		else:
 			self.env = None
 		self.get_behavior_descriptor = bd_function
@@ -45,13 +60,16 @@ class EvaluationFunctor:
 		self.reset_fn = jax.vmap(jax.jit(self.env.reset))
 		self.convert_fn = jax.vmap(jax.jit(self.controller.array_to_dict))
 
+	def get_controller(self):
+		return self.controller
+
 	@partial(jax.jit, static_argnums=(0,))
 	def eval(self, init_states, params):
 		def eval_step(carry, _):
 			states = carry
 			actions = self.inference_fn(params, states.obs)
 			next_states = self.step_fn(states, actions)
-			return (next_states), (next_states.reward, next_states.metrics)
+			return (next_states), (next_states.reward, next_states.metrics, next_states.info)
 		return jax.lax.scan(eval_step, init_states, None, length=self.episode_length)
 
 	def __call__(self, genotypes, random_key):
@@ -71,9 +89,12 @@ class EvaluationFunctor:
 		keys = jax.random.split(subkey, gens.shape[0])  # generate random keys for each individual
 		init_states = self.reset_fn(keys) # get different initial states for each individual
 
-		states, (rewards, metrics) = self.eval(init_states, params)  # evaluate
-		for m in metrics:
-			metrics[m] = metrics[m].T  # transpose metrics to have shape (n_indiv, n_metrics)
+		states, (rewards, metrics, info) = self.eval(init_states, params)  # evaluate
+
+		# Reshape to have shape (n_indiv, _)
+		metrics = jax.tree_map(lambda x: x.swapaxes(1, 0), metrics)
+		info = jax.tree_map(lambda x: x.swapaxes(1, 0), info)
+		rewards = rewards.swapaxes(1, 0)
 
 		# Select fitness
 		outdata = str(self.out)
@@ -85,13 +106,13 @@ class EvaluationFunctor:
 			sign = 1
 
 		if (outdata == 'total_reward'):
-			fitness = jp.sum(rewards, axis=0)
+			fitness = jp.sum(rewards, axis=1)
 		elif (outdata == 'final_reward'):
 			fitness = states.reward
 		elif (outdata == None or self.out == 'none'):
 			fitness = [[None] for _ in range(gens.shape[0])]
 		elif (outdata in states.metrics):
-			fitness = [states.metrics[outdata]]
+			fitness = jp.sum(metrics[outdata], axis=1)
 		else:
 			print("ERROR: No known output %s" % outdata)
 			return None
@@ -103,6 +124,5 @@ class EvaluationFunctor:
 		if self.get_behavior_descriptor is None:
 			raise RuntimeError("No behavior descriptor function defined")
 		else:
-			res = jax.lax.map(self.get_behavior_descriptor, metrics)
-			bd = jp.stack((res[0], res[1]), axis=1)
+			bd = jax.lax.map(self.get_behavior_descriptor, info)
 			return fitness, bd, random_key

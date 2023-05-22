@@ -13,7 +13,7 @@ class MLP(nn.Module):
     n_hidden_layers: int
     n_per_hidden: int
     kernel_init: Callable[..., Any] = lecun_uniform()
-    activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.sigmoid
+    activation: Callable[[jnp.ndarray], jnp.ndarray] = nn.relu
     final_activation: Optional[Callable[[jnp.ndarray], jnp.ndarray]] = nn.tanh
 
     @nn.compact
@@ -50,14 +50,29 @@ class SimpleNeuralControllerFlax:
     
     
     def init_random_params(self, ):
-        key1, key2 = random.split(random.PRNGKey(0))
-        x = random.uniform(key1, (self.dim_in,))
-        self.weights = self.model.init(key2, x)
+        x = jnp.zeros(shape=(self.dim_in,))
+        self.weights = self.model.init(random.PRNGKey(0), x)
         weights = self.weights['params'].unfreeze()
         self.keys = weights.keys()
         self.shapes = [(weights[k]['bias'].shape, weights[k]['kernel'].shape) for k in self.keys]
         self.n_weights = sum([np.prod(shape[0]) + np.prod(shape[1]) for shape in self.shapes])
-    
+
+
+    def generate_random_parameters(self, random_key, size):
+        random_key, subkey = random.split(random_key)
+        keys = jax.random.split(subkey, size)
+        fake_batch = jnp.zeros((size, self.dim_in))
+        params = jax.vmap(self.model.init)(keys, fake_batch)["params"]
+        
+        list = []
+        for layer in params:
+            bias = params[layer]["bias"].flatten().reshape(-1, params[layer]["bias"].shape[1])
+            kernel = params[layer]["kernel"].flatten().reshape(-1, params[layer]["kernel"].shape[1]*params[layer]["kernel"].shape[2])
+            list.append(bias)
+            list.append(kernel)
+        
+        return jnp.concatenate(list, axis=1), random_key
+
 
     def array_to_dict(self, flat_parameters):
         """

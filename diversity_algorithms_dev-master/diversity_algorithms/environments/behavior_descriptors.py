@@ -6,6 +6,8 @@
     22/08/2019
 """ 
 
+import numpy as np
+
 def maze_behavior_descriptor(traj):
 	"""
 	Computes the behavior descriptor from a trajectorty.
@@ -37,9 +39,8 @@ def billiard_behavior_descriptor(traj):
 	last_obs = last_step_data[0]
 	return last_obs[:2]
 
+def feet_contact_descriptor(traj):
+    return np.mean(traj["feet_contact"], axis=0)
 
-def ant_behavior_descriptor(traj):
-	"""
-	Computes the behavior descriptor from a trajectorty.
-	"""
-	return traj["x_position"][-1], traj["y_position"][-1]
+# def final_pos_descriptor(traj):
+# 	return traj["final_pos"]

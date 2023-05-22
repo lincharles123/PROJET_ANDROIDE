@@ -7,8 +7,10 @@ import numpy as np
 
 @partial(jax.jit, static_argnames={"eta", "min_val", "max_val", "indpb"})
 def mutate(random_key, gen, eta, min_val, max_val, indpb):
-	"""Polynomial mutation as implemented in deap (mutPolynomialBounded).
 	"""
+ 	Polynomial mutation as implemented in deap (mutPolynomialBounded) using jax to parrallelize the computation.
+	https://github.com/DEAP/deap/blob/master/deap/tools/mutation.py   
+ 	"""
 	random_key, subkey = jax.random.split(random_key)
 	mut_id = jnp.arange(gen.shape[0])
 	mut_id = jax.random.choice(subkey, mut_id, (int(indpb*gen.shape[0]),), replace=False)
@@ -38,28 +40,63 @@ def mutate(random_key, gen, eta, min_val, max_val, indpb):
 	return new_gen
 
 
+def cxBLend(random_key, gen1, gen2, alpha):
+	"""
+	Equivalent to deap algorithms.cxBlend but using jax to parrallelize the computation.
+	https://github.com/DEAP/deap/blob/master/deap/tools/crossover.py
+ 	"""
+	blend_id = jnp.arange(gen1.shape[0])
+	blend_id = jax.random.choice(random_key, blend_id, (int(alpha*gen1.shape[0]),), replace=False)
+
+	# Compute the new values
+	new_val1 = gen1[blend_id] + (gen2[blend_id] - gen1[blend_id]) * 0.5 * (1.0 + alpha)
+	new_val2 = gen2[blend_id] + (gen1[blend_id] - gen2[blend_id]) * 0.5 * (1.0 + alpha)
+
+	# Put the new values in the new individuals
+	new_gen1 = gen1.at[blend_id].set(new_val1)
+	new_gen2 = gen2.at[blend_id].set(new_val2)
+
+	return new_gen1, new_gen2
+
 def varOr(random_key, population, toolbox, lambda_, cxpb, mutpb):
 	"""
-	The mutation calcution on itself is very fast but the creation of the offspring is slow.
-	"""
-	random_key, mut_key = jax.random.split(random_key)
+	Equivalent to deap algorithms.varOr but using jax to parrallelize the computation.
+	https://github.com/DEAP/deap/blob/master/deap/algorithms.py
+ 	"""
+	assert cxpb + mutpb == 1.0, ("The sum of the crossover and mutation probabilities must be 1.0.")
+  
+	# Crossover
+	random_key, subkey = jax.random.split(random_key)
+	cx_ind = jnp.arange(len(population))
+	cx_ind = jax.random.choice(subkey, cx_ind, (int(cxpb*lambda_), 2))	# indices of the individuals to crossover
+	cx_ind1, cx_ind2 = cx_ind[:,0], cx_ind[:,1]	
  
+	# Crossover the geneotypes
+	random_key, subkey = jax.random.split(random_key)
+	keys = jax.random.split(subkey, cx_ind.shape[0])
+	cx_gen, _ = jax.vmap(toolbox.mate)(keys, jnp.asarray(population)[cx_ind1], jnp.asarray(population)[cx_ind2])
+ 
+	# Mutation
+	random_key, mut_key = jax.random.split(random_key)
 	mut_ind = jnp.arange(len(population))
-	mut_ind = jax.random.choice(mut_key, mut_ind, (int(mutpb*lambda_),))	# indices of the individuals to mutate
+	mut_ind = jax.random.choice(mut_key, mut_ind, (lambda_-cx_ind.shape[0],))	# indices of the individuals to mutate
 
 	# Mutate the geneotypes
 	random_key, subkey = jax.random.split(random_key)
 	keys = jax.random.split(subkey, mut_ind.shape[0])
 	mutate_gen = jax.vmap(toolbox.mutate)(keys, jnp.asarray(population)[mut_ind])
 	
+ 
 	# Create the offsprings
-	offspring = [creator.Individual([x]) for x in np.asarray(mutate_gen)]
+	off_gen = jnp.concatenate((cx_gen, mutate_gen), axis=0)
+	off_ind = jnp.concatenate((cx_ind1, mut_ind), axis=0)
+	offspring = [creator.Individual([x]) for x in np.asarray(off_gen)]
 	for i in range(len(offspring)):
 		offspring[i] =  offspring[i][0]
 		offspring[i].fitness = creator.FitnessMax()
 
 	# Copy bd and id from the mutated individuals
-	bd_id = [(population[i].bd, population[i].id) for i in mut_ind]
+	bd_id = [(population[i].bd, population[i].id) for i in off_ind]
 	for ind, val in zip(offspring, bd_id):
 		ind.bd = val[0]
 		ind.id = val[1]
@@ -73,7 +110,21 @@ def selBest(population, size, fit_attr="fitness"):
 	return [population[i] for i in index]
 
 
-def init_pop(random_key, size, params):
+def init_pop_controller(random_key, size, controller):
+	""" 
+	Weird behavior of creator.Individual, it is very slow when giving it an array but if given 
+	the array wrapped in a list it is working fine.
+	=> We create the population with jax and then wrap it in a list to create the individuals.
+	   Then we get the array out of the list for each individual and initialize a new fitness.
+	"""
+	all_pop, random_key = controller.generate_random_parameters(random_key, size)
+	population = [creator.Individual([x]) for x in np.asarray(all_pop)]
+	for i in range(len(population)):
+		population[i] =  population[i][0]
+		population[i].fitness = creator.FitnessMax()
+	return population, random_key
+
+def init_pop_numpy(random_key, size, params):
 	""" 
 	Weird behavior of creator.Individual, it is very slow when giving it an array but if given 
 	the array wrapped in a list it is working fine.
@@ -81,10 +132,9 @@ def init_pop(random_key, size, params):
 	   Then we get the array out of the list for each individual and initialize a new fitness.
 	"""
 	random_key, subkey = jax.random.split(random_key)
-	all = jax.random.uniform(subkey, (size,params["ind_size"]), jnp.float32, params["min"], params["max"],)
-	population = [creator.Individual([x]) for x in np.asarray(all)]
+	all_pop = jax.random.uniform(subkey, (size,params["ind_size"]), jnp.float32, params["min"], params["max"],)
+	population = [creator.Individual([x]) for x in np.asarray(all_pop)]
 	for i in range(len(population)):
 		population[i] =  population[i][0]
 		population[i].fitness = creator.FitnessMax()
 	return population, random_key
-

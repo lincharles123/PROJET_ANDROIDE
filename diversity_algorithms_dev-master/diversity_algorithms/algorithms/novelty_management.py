@@ -2,10 +2,7 @@
 import random
 from scipy.spatial import cKDTree as KDTree
 import numpy as np
-from operator import attrgetter
 from diversity_algorithms.algorithms.utils import verbosity
-import time
-import jax
 import jax.numpy as jnp
 
 __all__ = ["NovArchive", "updateNovelty"]
@@ -72,7 +69,6 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
        * params ["lambda_nov"] is the number of individuals added to the archive for each generation
      :returns: The function returns the new archive
     """
-    time_start=time.time()
     k=params["k"]
     add_strategy=params["add_strategy"]
     _lambda=params["lambda_nov"]
