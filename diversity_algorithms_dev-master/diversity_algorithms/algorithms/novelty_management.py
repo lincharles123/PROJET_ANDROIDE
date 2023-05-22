@@ -72,7 +72,7 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
     k=params["k"]
     add_strategy=params["add_strategy"]
     _lambda=params["lambda_nov"]
- 
+
     if (population_saved is not None):
         ref_pop=population_saved
     else: 
@@ -109,7 +109,7 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
     # Update of the archive
     # we remove indivs with NAN values
     offspring2 = list(filter(lambda x: not (True in np.isnan(x.bd)), offspring))
-    
+
     if (len(offspring)!=len(offspring2)):
         print("WARNING: in updateNovelty, some individuals have a behavior descriptor with NaN values ! Initial offspring size: %d, filtered offspring size: %d"%(len(offspring), len(offspring2)))
     if (len(offspring2)<_lambda):
@@ -121,10 +121,11 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
         if (verbosity(params,["all", "novelty"])):
             print("Random archive update. Adding offspring: "+str(l[:_lambda])) 
         lbd=[offspring2[l[i]].bd for i in range(_lambda)]
+        print(len(lbd))
     elif(add_strategy=="novel"):
         nov = jnp.asarray(np.asarray([ind.novelty for ind in offspring2]))
         index = jnp.argsort(nov)
-        ilast = index.shape[0] - 30
+        ilast = index.shape[0] - _lambda
         lbd = [offspring2[i].bd for i in index[ilast:]]
         if (verbosity(params,["all", "novelty"])):
             print("Novel archive update. Adding offspring: ")
