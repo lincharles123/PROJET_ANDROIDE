@@ -32,6 +32,7 @@ from diversity_algorithms.algorithms.quality_diversity import QDEa
 from diversity_algorithms.algorithms.utils import *
 
 from diversity_algorithms.experiments.exp_utils import *
+from diversity_algorithms.analysis.coverage import *
 
 # issues with memory allocation in jax
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "False"
@@ -95,6 +96,10 @@ if(__name__=='__main__'):
 	sparams = preparing_run(eval_func, params)
 
 	archive, logbook, nb_eval = QDEa(eval_func, sparams, random_key)
-
+	data = load_archive([ind.bd.tolist() for ind in archive.get_content_as_list()])
+	if sparams["env_name"] == "ant-omni":
+		coverageMap2d(data, -15, 15, 100)
+	else:
+		coverageMap4d(data, 0, 1, 10)
 	terminating_run(sparams, None, archive, logbook, nb_eval)
 

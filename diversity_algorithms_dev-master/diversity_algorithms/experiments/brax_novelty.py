@@ -27,6 +27,7 @@ from diversity_algorithms.algorithms.novelty_search import novelty_ea
 from diversity_algorithms.algorithms.utils import *
 
 from diversity_algorithms.experiments.exp_utils import *
+from diversity_algorithms.analysis.coverage import *
 
 # issues with memory allocation in jax
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "False"
@@ -37,7 +38,7 @@ params={
 	"run_dir_name": RunParam("R", "", "name of the dir in which to put the dir with the run files"),
 	"verbosity": RunParam("v", "none", "verbosity level (all, none or module specific values"),
 	"pop_size": RunParam("p", 100, "population size (mu)"),
-	"lambda": RunParam("l", 2., "Number of offspring generated (coeff on pop_size)"),
+	"lambda": RunParam("l", 1., "Number of offspring generated (coeff on pop_size)"),
 	"env_name": RunParam("e", "Fastsim-LS2011", "Environment name"),
 	"nb_gen":   RunParam("g", 100, "number of generations"),
 	"dump_period_evolvability": RunParam("V", 100, "period of evolvability estimation"),
@@ -89,7 +90,11 @@ if(__name__=='__main__'):
 	random_key = jax.random.PRNGKey(params["seed"].get_value())
 	sparams = preparing_run(eval_func, params)
 	pop, archive, logbook, nb_eval = novelty_ea(eval_func, sparams, random_key)
-
+	data = load_archive(archive.all_bd)
+	if sparams["env_name"] == "ant-omni":
+		coverageMap2d(data, -15, 15, 100)
+	else:
+		coverageMap4d(data, 0, 1, 10)
 	terminating_run(sparams, pop, archive, logbook, nb_eval)
 	sys.exit()
 

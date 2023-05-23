@@ -121,7 +121,6 @@ def updateNovelty(population, offspring, archive, params, population_saved=None)
         if (verbosity(params,["all", "novelty"])):
             print("Random archive update. Adding offspring: "+str(l[:_lambda])) 
         lbd=[offspring2[l[i]].bd for i in range(_lambda)]
-        print(len(lbd))
     elif(add_strategy=="novel"):
         nov = jnp.asarray(np.asarray([ind.novelty for ind in offspring2]))
         index = jnp.argsort(nov)
